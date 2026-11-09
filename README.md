@@ -1,5 +1,7 @@
 # wasm-deploy
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Zero-dependency WebAssembly deployment framework and Antigravity skill for compiling C, C++, Nim, and Rust projects into standalone single-file HTML applications with client-side `localStorage` persistence and a Libretro WebGL shader pipeline.
 
 ## Features

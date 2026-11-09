@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Dan Leslie <dan@ironoxide.ca>
 /**
  * Libretro WebGL Shader Pipeline
  *
