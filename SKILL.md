@@ -40,9 +40,7 @@ accessible across the local network and runnable offline.
 4. **Local Area Network (LAN) Hub Deployment**:
    - Applications are deployed to `/var/www/apps/<project-name>/index.html`.
    - Served by Nginx on port 80 via the symlink `/var/www/html/apps -> /var/www/apps`.
-   - Immediately accessible across the local network:
    - Immediately accessible across the local network at `http://<lan-ip>/apps/<project-name>/`.
-
    - Every deployed application is registered on the WebApps Hub at `/var/www/apps/index.html`.
    - Existing services (e.g., Wallabag on HTTPS port 443) remain completely untouched and isolated.
 
@@ -200,10 +198,9 @@ Ensure an entry for `<project-name>` is present in `/var/www/apps/index.html` un
 ```
 
 ### 7. Verification Checklist
-Run automated curl verification on both LAN subnets:
+Run automated curl verification on the local network endpoints:
 ```bash
 curl -I http://127.0.0.1/apps/<project-name>/
-curl -I http://localhost/apps/<project-name>/
 curl -I http://localhost/apps/<project-name>/
 # Verify existing HTTPS services are unaffected:
 curl -k -I https://127.0.0.1/ -H "Host: wallabag.ironoxide.ca"
