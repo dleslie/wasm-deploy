@@ -36,8 +36,16 @@
     "}"
   ].join("\n");
 
-  var PASSTHROUGH_FRAGMENT_SHADER = [
+  var PRECISION_HEADER = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH",
+    "precision highp float;",
+    "#else",
     "precision mediump float;",
+    "#endif"
+  ].join("\n");
+
+  var PASSTHROUGH_FRAGMENT_SHADER = [
+    PRECISION_HEADER,
     "uniform sampler2D Texture;",
     "varying vec2 vTexCoord;",
     "void main() {",
@@ -77,7 +85,7 @@
       passes: [
         {
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -149,7 +157,7 @@
         {
           // Pass 0: Horizontal glow / bloom blur
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 TextureSize;",
             "varying vec2 vTexCoord;",
@@ -168,7 +176,7 @@
         {
           // Pass 1: CRT-Geom barrel curvature, scanlines and aperture mask
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -233,7 +241,7 @@
         {
           // Pass 0: NTSC composite chroma delay / fringe
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 TextureSize;",
             "uniform float u_chroma;",
@@ -257,7 +265,7 @@
         {
           // Pass 1: Lottes scanlines + shadow mask + curvature
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -313,7 +321,7 @@
       passes: [
         {
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -369,7 +377,7 @@
         {
           // Pass 0: GBC Color Mangler Matrix
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform float lighten_screen;",
             "varying vec2 vTexCoord;",
@@ -393,7 +401,7 @@
         {
           // Pass 1: Retro-V2 Pixel Grid (Hyllian)
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -430,7 +438,7 @@
         {
           // Pass 0: GBA LCD Color Matrix
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform float darken_screen;",
             "varying vec2 vTexCoord;",
@@ -454,7 +462,7 @@
         {
           // Pass 1: Retro-V2 Pixel Grid
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -490,7 +498,7 @@
       passes: [
         {
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -535,7 +543,7 @@
       passes: [
         {
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -589,7 +597,7 @@
         {
           // Pass 0: Kawase Bloom Downsample
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 TextureSize;",
             "varying vec2 vTexCoord;",
@@ -609,7 +617,7 @@
         {
           // Pass 1: Screen Combine & Vector Neon Glow
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform float glow_intensity;",
             "varying vec2 vTexCoord;",
@@ -646,7 +654,7 @@
       passes: [
         {
           fragment: [
-            "precision highp float;",
+            PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
             "uniform vec2 TextureSize;",
@@ -809,47 +817,56 @@
     if (!this.gl) return;
     var gl = this.gl;
 
-    // Compile passes for this preset
-    this.compiledPasses = [];
-    for (var i = 0; i < preset.passes.length; i++) {
-      var passDef = preset.passes[i];
-      var vsSrc = passDef.vertex || DEFAULT_VERTEX_SHADER;
-      var fsSrc = passDef.fragment;
-      var prog = createProgram(gl, vsSrc, fsSrc);
+    try {
+      // Compile passes for this preset
+      var newPasses = [];
+      for (var i = 0; i < preset.passes.length; i++) {
+        var passDef = preset.passes[i];
+        var vsSrc = passDef.vertex || DEFAULT_VERTEX_SHADER;
+        var fsSrc = passDef.fragment;
+        var prog = createProgram(gl, vsSrc, fsSrc);
 
-      var passObj = {
-        program: prog,
-        filter_linear: passDef.filter_linear !== false,
-        scale_type: passDef.scale_type || "viewport",
-        scale: passDef.scale || 1.0,
-        attribs: {
-          VertexCoord: gl.getAttribLocation(prog, "VertexCoord"),
-          TexCoord: gl.getAttribLocation(prog, "TexCoord")
-        },
-        uniforms: {
-          MVPMatrix: gl.getUniformLocation(prog, "MVPMatrix"),
-          Texture: gl.getUniformLocation(prog, "Texture"),
-          OutputSize: gl.getUniformLocation(prog, "OutputSize"),
-          TextureSize: gl.getUniformLocation(prog, "TextureSize"),
-          InputSize: gl.getUniformLocation(prog, "InputSize"),
-          OrigInputSize: gl.getUniformLocation(prog, "OrigInputSize"),
-          FrameCount: gl.getUniformLocation(prog, "FrameCount"),
-          FrameDirection: gl.getUniformLocation(prog, "FrameDirection")
-        },
-        paramUniforms: {}
-      };
+        var passObj = {
+          program: prog,
+          filter_linear: passDef.filter_linear !== false,
+          scale_type: passDef.scale_type || "viewport",
+          scale: passDef.scale || 1.0,
+          attribs: {
+            VertexCoord: gl.getAttribLocation(prog, "VertexCoord"),
+            TexCoord: gl.getAttribLocation(prog, "TexCoord")
+          },
+          uniforms: {
+            MVPMatrix: gl.getUniformLocation(prog, "MVPMatrix"),
+            Texture: gl.getUniformLocation(prog, "Texture"),
+            OutputSize: gl.getUniformLocation(prog, "OutputSize"),
+            TextureSize: gl.getUniformLocation(prog, "TextureSize"),
+            InputSize: gl.getUniformLocation(prog, "InputSize"),
+            OrigInputSize: gl.getUniformLocation(prog, "OrigInputSize"),
+            FrameCount: gl.getUniformLocation(prog, "FrameCount"),
+            FrameDirection: gl.getUniformLocation(prog, "FrameDirection")
+          },
+          paramUniforms: {}
+        };
 
-      // Map parameter uniforms
-      var allParamKeys = Object.keys(this.activeParameters);
-      for (var p = 0; p < allParamKeys.length; p++) {
-        var pName = allParamKeys[p];
-        var loc = gl.getUniformLocation(prog, pName);
-        if (loc !== null) {
-          passObj.paramUniforms[pName] = loc;
+        // Map parameter uniforms
+        var allParamKeys = Object.keys(this.activeParameters);
+        for (var p = 0; p < allParamKeys.length; p++) {
+          var pName = allParamKeys[p];
+          var loc = gl.getUniformLocation(prog, pName);
+          if (loc !== null) {
+            passObj.paramUniforms[pName] = loc;
+          }
         }
-      }
 
-      this.compiledPasses.push(passObj);
+        newPasses.push(passObj);
+      }
+      this.compiledPasses = newPasses;
+    } catch (compileErr) {
+      console.warn("Failed to compile preset '" + presetId + "':", compileErr);
+      if (presetId !== "none") {
+        console.warn("Falling back to preset 'none'");
+        this.setPreset("none");
+      }
     }
   };
 
