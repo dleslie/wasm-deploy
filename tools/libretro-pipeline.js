@@ -14,24 +14,37 @@
 (function (global) {
   "use strict";
 
-  // Standard fullscreen quad positions and texcoords
-  // Coordinates map: (-1, 1) top-left -> (0, 0) UV, (1, -1) bottom-right -> (1, 1) UV
-  var QUAD_VERTICES = new Float32Array([
-    -1.0,  1.0, 0.0, 0.0,
-     1.0,  1.0, 1.0, 0.0,
-    -1.0, -1.0, 0.0, 1.0,
-     1.0, -1.0, 1.0, 1.0
+  // Fullscreen quad positions and texcoords
+  // Pass 0 (samples sourceTexture where V=0 is top):
+  var QUAD_SOURCE = new Float32Array([
+    // X,     Y,     U,   V,   origU, origV
+    -1.0,  1.0,   0.0, 0.0,   0.0, 0.0,
+     1.0,  1.0,   1.0, 0.0,   1.0, 0.0,
+    -1.0, -1.0,   0.0, 1.0,   0.0, 1.0,
+     1.0, -1.0,   1.0, 1.0,   1.0, 1.0
+  ]);
+
+  // Pass 1+ (samples FBO texture where V=1 is top):
+  var QUAD_FBO = new Float32Array([
+    // X,     Y,     U,   V,   origU, origV
+    -1.0,  1.0,   0.0, 1.0,   0.0, 0.0,
+     1.0,  1.0,   1.0, 1.0,   1.0, 0.0,
+    -1.0, -1.0,   0.0, 0.0,   0.0, 1.0,
+     1.0, -1.0,   1.0, 0.0,   1.0, 1.0
   ]);
 
   var DEFAULT_VERTEX_SHADER = [
     "attribute vec2 VertexCoord;",
     "attribute vec2 TexCoord;",
+    "attribute vec2 OrigTexCoord;",
     "uniform mat4 MVPMatrix;",
     "varying vec2 vTexCoord;",
+    "varying vec2 vOrigCoord;",
     "varying vec4 TEX0;",
     "void main() {",
     "    gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);",
     "    vTexCoord = TexCoord;",
+    "    vOrigCoord = OrigTexCoord;",
     "    TEX0 = vec4(TexCoord, 0.0, 1.0);",
     "}"
   ].join("\n");
@@ -116,14 +129,17 @@
             "    col.g = texture2D(Texture, pos).g;",
             "    col.b = texture2D(Texture, vec2(pos.x + shift, pos.y)).b;",
             "",
-            "    // Scanline modulation",
-            "    float scan = sin(pos.y * TextureSize.y * 3.14159265);",
-            "    col *= 1.0 - SCANLINE * (scan * scan * 0.65);",
+            "    // Authentic horizontal scanlines (cosine beam profile centered on each scanline)",
+            "    float scanFrac = fract(pos.y * InputSize.y) - 0.5;",
+            "    float scan = cos(scanFrac * 3.14159265);",
+            "    col *= mix(1.0 - SCANLINE * 0.70, 1.05, scan);",
             "",
-            "    // Phosphor dot mask (RGB triads)",
+            "    // Phosphor triad dot mask (RGB triads across screen pixels)",
             "    float maskIdx = mod(floor(pos.x * OutputSize.x), 3.0);",
-            "    vec3 mask = vec3(1.0 - MASK);",
-            "    if (maskIdx < 1.0) mask.r = 1.0; else if (maskIdx < 2.0) mask.g = 1.0; else mask.b = 1.0;",
+            "    vec3 mask = vec3(1.0 - MASK * 0.4);",
+            "    if (maskIdx < 1.0) mask.r = 1.0 + MASK * 0.35;",
+            "    else if (maskIdx < 2.0) mask.g = 1.0 + MASK * 0.35;",
+            "    else mask.b = 1.0 + MASK * 0.35;",
             "    col *= mask;",
             "",
             "    // Saturation and gain boost",
@@ -200,16 +216,15 @@
             "    }",
             "    vec3 color = pow(texture2D(Texture, pos).rgb, vec3(CRTgamma));",
             "",
-            "    // Dynamic scanline profile",
-            "    float scanY = pos.y * TextureSize.y;",
-            "    float scanFrac = fract(scanY) - 0.5;",
+            "    // Authentic horizontal scanline profile along Y",
+            "    float scanFrac = fract(pos.y * InputSize.y) - 0.5;",
             "    float scanDist = scanFrac * scanFrac;",
-            "    float scanFactor = exp(-scanDist / (scanline_weight * 0.25));",
-            "    color *= mix(0.55, 1.05, scanFactor);",
+            "    float scanFactor = exp(-scanDist / (scanline_weight * 0.18));",
+            "    color *= mix(1.0 - 0.45 * scanline_weight, 1.08, scanFactor);",
             "",
-            "    // Dot mask simulation",
+            "    // Subtle aperture dot mask",
             "    float m = mod(floor(pos.x * OutputSize.x), 2.0);",
-            "    color *= (m < 1.0) ? (1.0 - DOTMASK * 0.4) : (1.0 + DOTMASK * 0.2);",
+            "    color *= (m < 1.0) ? (1.0 - DOTMASK * 0.15) : (1.0 + DOTMASK * 0.12);",
             "",
             "    // Vignette / screen border falloff",
             "    vec2 vignette = clamp((0.5 - abs(pos - 0.5)) * 25.0, 0.0, 1.0);",
@@ -288,14 +303,16 @@
             "        return;",
             "    }",
             "    vec3 col = texture2D(Texture, pos).rgb;",
-            "    float scan = sin(pos.y * TextureSize.y * 3.14159265);",
-            "    col *= 1.0 - SCANLINE_SINE_COMP_B * (scan * scan);",
+            "    // Authentic horizontal scanlines along Y",
+            "    float scanFrac = fract(pos.y * InputSize.y) - 0.5;",
+            "    float scan = cos(scanFrac * 3.14159265);",
+            "    col *= mix(1.0 - SCANLINE_SINE_COMP_B * 0.70, 1.05, scan);",
             "",
-            "    // Triad shadow mask",
+            "    // Subtle triad shadow mask across screen pixels",
             "    float mask = mod(floor(pos.x * OutputSize.x), 3.0);",
-            "    vec3 m = vec3(0.72);",
-            "    if (mask < 1.0) m.r = 1.15; else if (mask < 2.0) m.g = 1.15; else m.b = 1.15;",
-            "    col *= m * 1.15;",
+            "    vec3 m = vec3(0.95);",
+            "    if (mask < 1.0) m.r = 1.05; else if (mask < 2.0) m.g = 1.05; else m.b = 1.05;",
+            "    col *= m;",
             "    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);",
             "}"
           ].join("\n"),
@@ -337,18 +354,20 @@
             "    vec3 src = pow(texture2D(Texture, uv).rgb, vec3(crt_gamma));",
             "    float brightness = dot(src, vec3(0.299, 0.587, 0.114));",
             "",
-            "    // Adaptive scanline beam: brighter pixels produce wider beam",
-            "    float beamWidth = mix(beam_min, beam_max, brightness);",
-            "    float scanPos = fract(uv.y * TextureSize.y) - 0.5;",
+            "    // Adaptive horizontal scanline beam along Y",
+            "    float beamWidth = mix(beam_min, beam_max, brightness) * 0.08;",
+            "    float scanPos = fract(uv.y * InputSize.y) - 0.5;",
             "    float scanDist = scanPos * scanPos;",
-            "    float beam = exp(-scanDist / (beamWidth * 0.15));",
-            "    vec3 col = src * beam;",
+            "    float beam = exp(-scanDist / beamWidth);",
+            "    vec3 col = src * mix(0.48, 1.10, beam);",
             "",
-            "    // Trinitron-style vertical aperture grille mask",
+            "    // Trinitron-style subtle aperture grille mask across screen pixels",
             "    float triad = mod(floor(uv.x * OutputSize.x), 3.0);",
-            "    vec3 mask = vec3(mask_dark);",
-            "    if (triad < 1.0) mask.r = mask_light; else if (triad < 2.0) mask.g = mask_light; else mask.b = mask_light;",
-            "    col *= mask * 1.35;",
+            "    vec3 mask = vec3(mask_dark * 0.35 + 0.65);",
+            "    if (triad < 1.0) mask.r = mask_light * 0.25 + 0.75;",
+            "    else if (triad < 2.0) mask.g = mask_light * 0.25 + 0.75;",
+            "    else mask.b = mask_light * 0.25 + 0.75;",
+            "    col *= mask;",
             "",
             "    gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);",
             "}"
@@ -404,13 +423,13 @@
             PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
-            "uniform vec2 TextureSize;",
+            "uniform vec2 InputSize;",
             "uniform float RETRO_PIXEL_SIZE;",
             "varying vec2 vTexCoord;",
             "void main() {",
             "    vec3 c = pow(texture2D(Texture, vTexCoord).rgb, vec3(2.4));",
-            "    vec2 fp = fract(vTexCoord * TextureSize);",
-            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 fp = fract(vTexCoord * InputSize);",
+            "    vec2 ps = InputSize / OutputSize;",
             "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
             "    float maxCoord = max(f.x, f.y);",
             "    vec3 res = mix(c * (1.04 + fp.x * fp.y), c * 0.36, maxCoord);",
@@ -465,13 +484,13 @@
             PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
-            "uniform vec2 TextureSize;",
+            "uniform vec2 InputSize;",
             "uniform float RETRO_PIXEL_SIZE;",
             "varying vec2 vTexCoord;",
             "void main() {",
             "    vec3 c = pow(texture2D(Texture, vTexCoord).rgb, vec3(2.4));",
-            "    vec2 fp = fract(vTexCoord * TextureSize);",
-            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 fp = fract(vTexCoord * InputSize);",
+            "    vec2 ps = InputSize / OutputSize;",
             "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
             "    float maxCoord = max(f.x, f.y);",
             "    vec3 res = mix(c * (1.04 + fp.x * fp.y), c * 0.40, maxCoord);",
@@ -501,7 +520,7 @@
             PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 OutputSize;",
-            "uniform vec2 TextureSize;",
+            "uniform vec2 InputSize;",
             "uniform float RETRO_PIXEL_SIZE;",
             "uniform float sat_boost;",
             "uniform float contrast_boost;",
@@ -514,8 +533,8 @@
             "    c = mix(vec3(luma), c, sat_boost);",
             "",
             "    // Retro LCD grid lines",
-            "    vec2 fp = fract(vTexCoord * TextureSize);",
-            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 fp = fract(vTexCoord * InputSize);",
+            "    vec2 ps = InputSize / OutputSize;",
             "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
             "    float grid = max(f.x, f.y);",
             "    c = mix(c, c * 0.38, grid);",
@@ -559,18 +578,19 @@
             "    // C64 composite luma-chroma smear",
             "    vec3 c = mix(c0, cL, 0.35);",
             "",
-            "    // Scanline raster lines",
-            "    float scan = sin(vTexCoord.y * TextureSize.y * 3.14159265);",
-            "    c *= 1.0 - scan_line * (scan * scan * 0.6);",
+            "    // Authentic Commodore 1702 CRT raster horizontal scanlines",
+            "    float scanFrac = fract(vTexCoord.y * InputSize.y) - 0.5;",
+            "    float scan = cos(scanFrac * 3.14159265);",
+            "    c *= mix(1.0 - scan_line * 0.70, 1.05, scan);",
             "",
-            "    // Commodore 1702/1084 CRT phosphor tone",
-            "    c.r *= 1.0 + phosphor_tint * 0.08;",
-            "    c.g *= 1.0 + phosphor_tint * 0.04;",
-            "    c.b *= 1.0 - phosphor_tint * 0.06;",
+            "    // Commodore 1702 CRT phosphor tone",
+            "    c.r *= 1.0 + phosphor_tint * 0.05;",
+            "    c.g *= 1.0 + phosphor_tint * 0.02;",
+            "    c.b *= 1.0 - phosphor_tint * 0.04;",
             "",
-            "    // Slot mask horizontal bars",
-            "    float slot = mod(floor(vTexCoord.x * OutputSize.x * 0.5), 2.0);",
-            "    c *= (slot < 1.0) ? 0.90 : 1.08;",
+            "    // Subtle slot mask across screen pixels",
+            "    float slot = mod(floor(vTexCoord.x * OutputSize.x), 2.0);",
+            "    c *= (slot < 1.0) ? 0.96 : 1.04;",
             "",
             "    gl_FragColor = vec4(clamp(c * 1.12, 0.0, 1.0), 1.0);",
             "}"
@@ -595,19 +615,18 @@
       category: "Arcade",
       passes: [
         {
-          // Pass 0: Kawase Bloom Downsample
+          // Pass 0: High-pass extraction of vector neon lines
           fragment: [
             PRECISION_HEADER,
             "uniform sampler2D Texture;",
             "uniform vec2 TextureSize;",
             "varying vec2 vTexCoord;",
             "void main() {",
-            "    vec2 d = 2.0 / TextureSize;",
-            "    vec3 col = texture2D(Texture, vTexCoord + vec2(-d.x, -d.y)).rgb * 0.25;",
-            "    col += texture2D(Texture, vTexCoord + vec2( d.x, -d.y)).rgb * 0.25;",
-            "    col += texture2D(Texture, vTexCoord + vec2(-d.x,  d.y)).rgb * 0.25;",
-            "    col += texture2D(Texture, vTexCoord + vec2( d.x,  d.y)).rgb * 0.25;",
-            "    gl_FragColor = vec4(col, 1.0);",
+            "    vec3 col = texture2D(Texture, vTexCoord).rgb;",
+            "    float luma = dot(col, vec3(0.299, 0.587, 0.114));",
+            "    // Only extract bright vector lines and highlights for bloom",
+            "    float bloomWeight = smoothstep(0.55, 0.90, luma);",
+            "    gl_FragColor = vec4(col * bloomWeight, 1.0);",
             "}"
           ].join("\n"),
           filter_linear: true,
@@ -615,23 +634,28 @@
           scale: 0.5
         },
         {
-          // Pass 1: Screen Combine & Vector Neon Glow
+          // Pass 1: Crisp original + tight vector neon halo
           fragment: [
             PRECISION_HEADER,
             "uniform sampler2D Texture;",
+            "uniform sampler2D OrigTexture;",
+            "uniform vec2 TextureSize;",
             "uniform float glow_intensity;",
             "varying vec2 vTexCoord;",
+            "varying vec2 vOrigCoord;",
             "void main() {",
-            "    vec3 sharp = texture2D(Texture, vTexCoord).rgb;",
-            "    // Sample wider bloom",
-            "    vec2 d = vec2(0.0035, 0.0035);",
-            "    vec3 bloom = texture2D(Texture, vTexCoord + vec2(-d.x, -d.y)).rgb * 0.25;",
-            "    bloom += texture2D(Texture, vTexCoord + vec2( d.x, -d.y)).rgb * 0.25;",
-            "    bloom += texture2D(Texture, vTexCoord + vec2(-d.x,  d.y)).rgb * 0.25;",
-            "    bloom += texture2D(Texture, vTexCoord + vec2( d.x,  d.y)).rgb * 0.25;",
+            "    // Sharp original pixels remain completely crisp and unblurred!",
+            "    vec3 base = texture2D(OrigTexture, vOrigCoord).rgb;",
+            "    // Sample tight 9-tap gaussian bloom of bright highlights",
+            "    vec2 d = 2.0 / TextureSize;",
+            "    vec3 bloom = texture2D(Texture, vTexCoord).rgb * 0.28;",
+            "    bloom += (texture2D(Texture, vTexCoord + vec2(-d.x, 0.0)).rgb + texture2D(Texture, vTexCoord + vec2(d.x, 0.0)).rgb) * 0.18;",
+            "    bloom += (texture2D(Texture, vTexCoord + vec2(0.0, -d.y)).rgb + texture2D(Texture, vTexCoord + vec2(0.0, d.y)).rgb) * 0.18;",
+            "    bloom += (texture2D(Texture, vTexCoord + vec2(-d.x, -d.y)).rgb + texture2D(Texture, vTexCoord + vec2(d.x, d.y)).rgb) * 0.09;",
+            "    bloom += (texture2D(Texture, vTexCoord + vec2(d.x, -d.y)).rgb + texture2D(Texture, vTexCoord + vec2(-d.x, d.y)).rgb) * 0.09;",
             "",
             "    // Vector additive bloom synthesis",
-            "    vec3 finalColor = sharp + bloom * glow_intensity * 1.8;",
+            "    vec3 finalColor = base + bloom * (glow_intensity * 0.65);",
             "    gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);",
             "}"
           ].join("\n"),
@@ -641,7 +665,7 @@
         }
       ],
       parameters: {
-        glow_intensity: 1.35
+        glow_intensity: 1.0
       }
     },
 
@@ -752,10 +776,16 @@
     }
     this.gl = gl;
 
-    // Fullscreen quad buffer
-    this.quadBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
+    // Fullscreen quad buffers:
+    // Pass 0 samples sourceTexture (UNPACK_FLIP_Y=false, V=0 is top)
+    this.quadBufferSource = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBufferSource);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_SOURCE, gl.STATIC_DRAW);
+
+    // Pass 1+ samples FBO texture (OpenGL coordinate space, V=1 is top)
+    this.quadBufferFBO = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBufferFBO);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_FBO, gl.STATIC_DRAW);
 
     // Source texture
     this.sourceTexture = gl.createTexture();
@@ -833,11 +863,13 @@
           scale: passDef.scale || 1.0,
           attribs: {
             VertexCoord: gl.getAttribLocation(prog, "VertexCoord"),
-            TexCoord: gl.getAttribLocation(prog, "TexCoord")
+            TexCoord: gl.getAttribLocation(prog, "TexCoord"),
+            OrigTexCoord: gl.getAttribLocation(prog, "OrigTexCoord")
           },
           uniforms: {
             MVPMatrix: gl.getUniformLocation(prog, "MVPMatrix"),
             Texture: gl.getUniformLocation(prog, "Texture"),
+            OrigTexture: gl.getUniformLocation(prog, "OrigTexture"),
             OutputSize: gl.getUniformLocation(prog, "OutputSize"),
             TextureSize: gl.getUniformLocation(prog, "TextureSize"),
             InputSize: gl.getUniformLocation(prog, "InputSize"),
@@ -918,6 +950,24 @@
     if (!this.gl) return;
     var gl = this.gl;
 
+    // Auto-sync canvas internal resolution with its display size for crisp CRT scanlines & masks
+    if (this.currentPresetId === "none") {
+      if (this.canvas.width !== width || this.canvas.height !== height) {
+        this.canvas.width = width;
+        this.canvas.height = height;
+      }
+    } else {
+      var dpr = window.devicePixelRatio || 1;
+      var cW = this.canvas.clientWidth || 0;
+      var cH = this.canvas.clientHeight || 0;
+      var targetW = (cW > 0) ? Math.min(1920, Math.round(cW * dpr)) : (width * 3);
+      var targetH = (cH > 0) ? Math.min(1440, Math.round(cH * dpr)) : (height * 3);
+      if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+        this.canvas.width = targetW;
+        this.canvas.height = targetH;
+      }
+    }
+
     // Upload source texture
     gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -955,8 +1005,6 @@
     var currentInW = width;
     var currentInH = height;
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
-
     // Standard 4x4 Identity Matrix
     var idMatrix = [
       1, 0, 0, 0,
@@ -993,7 +1041,13 @@
 
       gl.useProgram(pass.program);
 
-      // Bind input texture & filtering
+      // Select quad buffer:
+      // Pass 0 samples sourceTexture (UNPACK_FLIP_Y=false, V=0 is top)
+      // Pass 1+ samples FBO texture (WebGL FBO texture coords, V=1 is top)
+      var activeQuad = (i === 0) ? this.quadBufferSource : this.quadBufferFBO;
+      gl.bindBuffer(gl.ARRAY_BUFFER, activeQuad);
+
+      // Bind input texture & filtering (Texture Unit 0)
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, currentInTexture);
       var filterMode = pass.filter_linear ? gl.LINEAR : gl.NEAREST;
@@ -1001,14 +1055,23 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filterMode);
       if (pass.uniforms.Texture !== null) gl.uniform1i(pass.uniforms.Texture, 0);
 
-      // Vertex Attributes (Interleaved: x, y, u, v)
+      // Bind original source texture (Texture Unit 1)
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
+      if (pass.uniforms.OrigTexture !== null) gl.uniform1i(pass.uniforms.OrigTexture, 1);
+
+      // Vertex Attributes (Interleaved 24 bytes: x, y, u, v, origU, origV)
       if (pass.attribs.VertexCoord >= 0) {
         gl.enableVertexAttribArray(pass.attribs.VertexCoord);
-        gl.vertexAttribPointer(pass.attribs.VertexCoord, 2, gl.FLOAT, false, 16, 0);
+        gl.vertexAttribPointer(pass.attribs.VertexCoord, 2, gl.FLOAT, false, 24, 0);
       }
       if (pass.attribs.TexCoord >= 0) {
         gl.enableVertexAttribArray(pass.attribs.TexCoord);
-        gl.vertexAttribPointer(pass.attribs.TexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.vertexAttribPointer(pass.attribs.TexCoord, 2, gl.FLOAT, false, 24, 8);
+      }
+      if (pass.attribs.OrigTexCoord >= 0) {
+        gl.enableVertexAttribArray(pass.attribs.OrigTexCoord);
+        gl.vertexAttribPointer(pass.attribs.OrigTexCoord, 2, gl.FLOAT, false, 24, 16);
       }
 
       // Standard Uniforms
