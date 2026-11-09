@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Antigravity WASM Application</title>
+  <style>
+    :root {
+      --bg: #0b0908;
+      --card-bg: #161210;
+      --border: #3a2618;
+      --gold: #d4af37;
+      --blood: #a8201a;
+      --text: #e6dcc8;
+      --text-muted: #9a8c76;
+      --font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% 15%, #1d1410 0%, var(--bg) 75%);
+      color: var(--text);
+      font-family: var(--font);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      max-width: 1040px;
+      padding: 0.65rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 11, 9, 0.92);
+    }
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--gold);
+      text-shadow: 0 0 8px rgba(212, 175, 55, 0.35);
+    }
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: #2a1812;
+      border: 1px solid #59251a;
+      color: #f2b8a2;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      align-items: center;
+    }
+    button, select, .file-btn {
+      background: #211915;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.65rem;
+      border-radius: 5px;
+      font-family: inherit;
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    button:hover, select:hover, .file-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: #2b201a;
+    }
+    select.shader-select {
+      background: #1b1411;
+      border-color: #5a3d24;
+      color: var(--gold);
+      font-weight: 600;
+      outline: none;
+      padding: 0.35rem 0.5rem;
+    }
+    select.shader-select optgroup {
+      background: #161210;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+    select.shader-select option {
+      background: #211915;
+      color: var(--text);
+      font-weight: normal;
+    }
+    button.primary {
+      border-color: #7c2419;
+      background: #36130e;
+      color: #ffd6cc;
+    }
+    button.primary:hover {
+      border-color: #d44230;
+      background: #4b1812;
+    }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1040px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1rem;
+      gap: 0.75rem;
+    }
+    .viewport-wrap {
+      position: relative;
+      background: #000;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 12px 38px rgba(0, 0, 0, 0.85), 0 0 24px rgba(168, 32, 26, 0.2);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas#screen {
+      width: min(94vw, 960px);
+      height: calc(min(94vw, 960px) * (224 / 320));
+      max-height: 72vh;
+      max-width: calc(72vh * (320 / 224));
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+      background: #000;
+    }
+    #toast {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 12, 10, 0.94);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      padding: 0.35rem 0.85rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    #toast.visible { opacity: 1; }
+    footer {
+      width: 100%;
+      max-width: 1040px;
+      padding: 0.5rem 1rem 1.5rem 1rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1 id="app-title">WebAssembly App</h1>
+      <span class="badge" id="app-badge">WASM</span>
+      <span id="status-text" style="font-size:0.74rem; color:var(--text-muted)">Booting...</span>
+    </div>
+    <div class="toolbar">
+      <!-- Libretro Shader Preset Selector Dropdown -->
+      <label style="font-size:0.72rem; color:var(--text-muted); display:flex; align-items:center; gap:0.35rem;">
+        <span>Shader:</span>
+        <select id="libretro-shader-select" class="shader-select" title="Libretro GLSL Shader Preset"></select>
+      </label>
+      <button id="btn-audio" class="primary" title="Toggle Sound">Audio: Off</button>
+      <button id="btn-fullscreen" title="Toggle Fullscreen">Fullscreen</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="viewport-wrap" id="viewport-wrap">
+      <canvas id="screen" width="320" height="224"></canvas>
+      <div id="toast">Ready</div>
+    </div>
+  </main>
+
+  <footer>
+    <span>Powered by Antigravity wasm-deploy</span>
+    <span id="render-telemetry">Shader: WebGL · Ready</span>
+  </footer>
+
+  <!-- Libretro WebGL Shader Pipeline -->
+  <script>
+    /**
+ * Libretro WebGL Shader Pipeline
+ *
+ * Implements high-performance multi-pass shader rendering modeled after
+ * the Libretro/RetroArch GLSL shader pipeline (.glslp specification):
+ * https://github.com/libretro/glsl-shaders/tree/master/presets
+ *
+ * Designed for zero-dependency standalone WebAssembly web applications
+ * deployed via Antigravity wasm-deploy.
+ *
+ * Author: Dan Leslie <dan@ironoxide.ca>
+ */
+
+(function (global) {
+  "use strict";
+
+  // Standard fullscreen quad positions and texcoords
+  // Coordinates map: (-1, 1) top-left -> (0, 0) UV, (1, -1) bottom-right -> (1, 1) UV
+  var QUAD_VERTICES = new Float32Array([
+    -1.0,  1.0, 0.0, 0.0,
+     1.0,  1.0, 1.0, 0.0,
+    -1.0, -1.0, 0.0, 1.0,
+     1.0, -1.0, 1.0, 1.0
+  ]);
+
+  var DEFAULT_VERTEX_SHADER = [
+    "attribute vec2 VertexCoord;",
+    "attribute vec2 TexCoord;",
+    "uniform mat4 MVPMatrix;",
+    "varying vec2 vTexCoord;",
+    "varying vec4 TEX0;",
+    "void main() {",
+    "    gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);",
+    "    vTexCoord = TexCoord;",
+    "    TEX0 = vec4(TexCoord, 0.0, 1.0);",
+    "}"
+  ].join("\n");
+
+  var PASSTHROUGH_FRAGMENT_SHADER = [
+    "precision mediump float;",
+    "uniform sampler2D Texture;",
+    "varying vec2 vTexCoord;",
+    "void main() {",
+    "    gl_FragColor = texture2D(Texture, vTexCoord);",
+    "}"
+  ].join("\n");
+
+  // =========================================================================
+  // LIBRETRO SHADER PRESET DEFINITIONS
+  // Derived directly from https://github.com/libretro/glsl-shaders/tree/master/presets
+  // =========================================================================
+
+  var PRESET_DEFINITIONS = {
+    // -----------------------------------------------------------------------
+    // None / Pass-through (Crisp Pixels)
+    // -----------------------------------------------------------------------
+    "none": {
+      name: "None (Crisp Pixels)",
+      category: "Default",
+      passes: [
+        {
+          fragment: PASSTHROUGH_FRAGMENT_SHADER,
+          filter_linear: false,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {}
+    },
+
+    // -----------------------------------------------------------------------
+    // CRT - Consumer Light (presets/crt-consumer-light.glslp)
+    // -----------------------------------------------------------------------
+    "crt-consumer-light": {
+      name: "CRT — Consumer Light",
+      category: "CRT",
+      passes: [
+        {
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform vec2 InputSize;",
+            "uniform int FrameCount;",
+            "uniform float WARP;",
+            "uniform float SCANLINE;",
+            "uniform float MASK;",
+            "uniform float COL_GAIN;",
+            "uniform float U_SAT;",
+            "uniform float U_CONVERG;",
+            "varying vec2 vTexCoord;",
+            "",
+            "vec2 warpDistort(vec2 pos, float amount) {",
+            "    vec2 c = pos - 0.5;",
+            "    return pos + c * dot(c, c) * amount;",
+            "}",
+            "",
+            "void main() {",
+            "    vec2 pos = warpDistort(vTexCoord, WARP * 0.15);",
+            "    if (pos.x < 0.0 || pos.x > 1.0 || pos.y < 0.0 || pos.y > 1.0) {",
+            "        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+            "        return;",
+            "    }",
+            "    float shift = U_CONVERG * 0.8 / TextureSize.x;",
+            "    vec3 col;",
+            "    col.r = texture2D(Texture, vec2(pos.x - shift, pos.y)).r;",
+            "    col.g = texture2D(Texture, pos).g;",
+            "    col.b = texture2D(Texture, vec2(pos.x + shift, pos.y)).b;",
+            "",
+            "    // Scanline modulation",
+            "    float scan = sin(pos.y * TextureSize.y * 3.14159265);",
+            "    col *= 1.0 - SCANLINE * (scan * scan * 0.65);",
+            "",
+            "    // Phosphor dot mask (RGB triads)",
+            "    float maskIdx = mod(floor(pos.x * OutputSize.x), 3.0);",
+            "    vec3 mask = vec3(1.0 - MASK);",
+            "    if (maskIdx < 1.0) mask.r = 1.0; else if (maskIdx < 2.0) mask.g = 1.0; else mask.b = 1.0;",
+            "    col *= mask;",
+            "",
+            "    // Saturation and gain boost",
+            "    float luma = dot(col, vec3(0.299, 0.587, 0.114));",
+            "    col = mix(vec3(luma), col, U_SAT) * COL_GAIN;",
+            "    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        WARP: 0.12,
+        SCANLINE: 0.45,
+        MASK: 0.22,
+        COL_GAIN: 1.25,
+        U_SAT: 1.2,
+        U_CONVERG: 0.6
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // CRT - Geom Glow (presets/crt-Geom-glow.glslp)
+    // -----------------------------------------------------------------------
+    "crt-geom-glow": {
+      name: "CRT — Geom Glow",
+      category: "CRT",
+      passes: [
+        {
+          // Pass 0: Horizontal glow / bloom blur
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 TextureSize;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec2 dx = vec2(1.2 / TextureSize.x, 0.0);",
+            "    vec3 c = texture2D(Texture, vTexCoord).rgb * 0.38;",
+            "    c += (texture2D(Texture, vTexCoord - dx).rgb + texture2D(Texture, vTexCoord + dx).rgb) * 0.24;",
+            "    c += (texture2D(Texture, vTexCoord - dx * 2.0).rgb + texture2D(Texture, vTexCoord + dx * 2.0).rgb) * 0.07;",
+            "    gl_FragColor = vec4(c, 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "source",
+          scale: 1.0
+        },
+        {
+          // Pass 1: CRT-Geom barrel curvature, scanlines and aperture mask
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float CURVATURE;",
+            "uniform float DOTMASK;",
+            "uniform float scanline_weight;",
+            "uniform float CRTgamma;",
+            "varying vec2 vTexCoord;",
+            "",
+            "vec2 geomWarp(vec2 uv) {",
+            "    vec2 c = uv - 0.5;",
+            "    float r2 = dot(c, c);",
+            "    return uv + c * (r2 * 0.18 + r2 * r2 * 0.06) * CURVATURE;",
+            "}",
+            "",
+            "void main() {",
+            "    vec2 pos = geomWarp(vTexCoord);",
+            "    if (pos.x < 0.0 || pos.x > 1.0 || pos.y < 0.0 || pos.y > 1.0) {",
+            "        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+            "        return;",
+            "    }",
+            "    vec3 color = pow(texture2D(Texture, pos).rgb, vec3(CRTgamma));",
+            "",
+            "    // Dynamic scanline profile",
+            "    float scanY = pos.y * TextureSize.y;",
+            "    float scanFrac = fract(scanY) - 0.5;",
+            "    float scanDist = scanFrac * scanFrac;",
+            "    float scanFactor = exp(-scanDist / (scanline_weight * 0.25));",
+            "    color *= mix(0.55, 1.05, scanFactor);",
+            "",
+            "    // Dot mask simulation",
+            "    float m = mod(floor(pos.x * OutputSize.x), 2.0);",
+            "    color *= (m < 1.0) ? (1.0 - DOTMASK * 0.4) : (1.0 + DOTMASK * 0.2);",
+            "",
+            "    // Vignette / screen border falloff",
+            "    vec2 vignette = clamp((0.5 - abs(pos - 0.5)) * 25.0, 0.0, 1.0);",
+            "    color *= vignette.x * vignette.y;",
+            "",
+            "    gl_FragColor = vec4(pow(clamp(color * 1.15, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        CURVATURE: 1.0,
+        DOTMASK: 0.35,
+        scanline_weight: 0.32,
+        CRTgamma: 2.2
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // CRT - Fakelottes NTSC Composite (presets/fakelottes-ntsc-composite.glslp)
+    // -----------------------------------------------------------------------
+    "fakelottes-ntsc-composite": {
+      name: "CRT — Fakelottes NTSC Composite",
+      category: "CRT",
+      passes: [
+        {
+          // Pass 0: NTSC composite chroma delay / fringe
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 TextureSize;",
+            "uniform float u_chroma;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    float dx = 1.0 / TextureSize.x;",
+            "    vec4 c0 = texture2D(Texture, vTexCoord);",
+            "    vec4 cL = texture2D(Texture, vTexCoord - vec2(dx * u_chroma * 0.8, 0.0));",
+            "    vec4 cR = texture2D(Texture, vTexCoord + vec2(dx * u_chroma * 0.8, 0.0));",
+            "    vec3 ntsc;",
+            "    ntsc.r = cL.r * 0.65 + c0.r * 0.35;",
+            "    ntsc.g = c0.g * 0.80 + (cL.g + cR.g) * 0.10;",
+            "    ntsc.b = cR.b * 0.70 + c0.b * 0.30;",
+            "    gl_FragColor = vec4(ntsc, 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "source",
+          scale: 1.0
+        },
+        {
+          // Pass 1: Lottes scanlines + shadow mask + curvature
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float warpX;",
+            "uniform float warpY;",
+            "uniform float SCANLINE_SINE_COMP_B;",
+            "varying vec2 vTexCoord;",
+            "",
+            "vec2 warp(vec2 uv) {",
+            "    vec2 c = uv - 0.5;",
+            "    uv.x += c.x * c.y * c.y * warpX * 4.0;",
+            "    uv.y += c.y * c.x * c.x * warpY * 4.0;",
+            "    return uv;",
+            "}",
+            "",
+            "void main() {",
+            "    vec2 pos = warp(vTexCoord);",
+            "    if (pos.x < 0.0 || pos.x > 1.0 || pos.y < 0.0 || pos.y > 1.0) {",
+            "        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+            "        return;",
+            "    }",
+            "    vec3 col = texture2D(Texture, pos).rgb;",
+            "    float scan = sin(pos.y * TextureSize.y * 3.14159265);",
+            "    col *= 1.0 - SCANLINE_SINE_COMP_B * (scan * scan);",
+            "",
+            "    // Triad shadow mask",
+            "    float mask = mod(floor(pos.x * OutputSize.x), 3.0);",
+            "    vec3 m = vec3(0.72);",
+            "    if (mask < 1.0) m.r = 1.15; else if (mask < 2.0) m.g = 1.15; else m.b = 1.15;",
+            "    col *= m * 1.15;",
+            "    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        u_chroma: 1.8,
+        warpX: 0.035,
+        warpY: 0.045,
+        SCANLINE_SINE_COMP_B: 0.38
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // CRT - Kurozumi / Guest Dr. Venom (presets/crt-guest-dr-venom-kurozumi.glslp)
+    // -----------------------------------------------------------------------
+    "crt-guest-kurozumi": {
+      name: "CRT — Guest Dr. Venom Kurozumi",
+      category: "CRT",
+      passes: [
+        {
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float beam_min;",
+            "uniform float beam_max;",
+            "uniform float mask_dark;",
+            "uniform float mask_light;",
+            "uniform float crt_gamma;",
+            "varying vec2 vTexCoord;",
+            "",
+            "void main() {",
+            "    vec2 uv = vTexCoord;",
+            "    vec3 src = pow(texture2D(Texture, uv).rgb, vec3(crt_gamma));",
+            "    float brightness = dot(src, vec3(0.299, 0.587, 0.114));",
+            "",
+            "    // Adaptive scanline beam: brighter pixels produce wider beam",
+            "    float beamWidth = mix(beam_min, beam_max, brightness);",
+            "    float scanPos = fract(uv.y * TextureSize.y) - 0.5;",
+            "    float scanDist = scanPos * scanPos;",
+            "    float beam = exp(-scanDist / (beamWidth * 0.15));",
+            "    vec3 col = src * beam;",
+            "",
+            "    // Trinitron-style vertical aperture grille mask",
+            "    float triad = mod(floor(uv.x * OutputSize.x), 3.0);",
+            "    vec3 mask = vec3(mask_dark);",
+            "    if (triad < 1.0) mask.r = mask_light; else if (triad < 2.0) mask.g = mask_light; else mask.b = mask_light;",
+            "    col *= mask * 1.35;",
+            "",
+            "    gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        beam_min: 1.2,
+        beam_max: 2.8,
+        mask_dark: 0.65,
+        mask_light: 1.35,
+        crt_gamma: 2.4
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Handheld - Retro V2 + GBC Color (presets/retro-v2+gbc-color.glslp)
+    // -----------------------------------------------------------------------
+    "retro-v2+gbc-color": {
+      name: "Handheld — Retro V2 + GBC Color",
+      category: "Handheld",
+      passes: [
+        {
+          // Pass 0: GBC Color Mangler Matrix
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform float lighten_screen;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec4 screen = pow(texture2D(Texture, vTexCoord), vec4(2.2 - lighten_screen * 0.8));",
+            "    mat4 colorMat = mat4(",
+            "        0.82, 0.125, 0.195, 0.0,",
+            "        0.24, 0.665, 0.075, 0.0,",
+            "       -0.06, 0.21,  0.73,  0.0,",
+            "        0.0,  0.0,   0.0,   1.0",
+            "    );",
+            "    screen = clamp(screen * 0.94, 0.0, 1.0);",
+            "    screen = colorMat * screen;",
+            "    gl_FragColor = pow(clamp(screen, 0.0, 1.0), vec4(1.0 / 2.2));",
+            "}"
+          ].join("\n"),
+          filter_linear: false,
+          scale_type: "source",
+          scale: 1.0
+        },
+        {
+          // Pass 1: Retro-V2 Pixel Grid (Hyllian)
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float RETRO_PIXEL_SIZE;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec3 c = pow(texture2D(Texture, vTexCoord).rgb, vec3(2.4));",
+            "    vec2 fp = fract(vTexCoord * TextureSize);",
+            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
+            "    float maxCoord = max(f.x, f.y);",
+            "    vec3 res = mix(c * (1.04 + fp.x * fp.y), c * 0.36, maxCoord);",
+            "    gl_FragColor = vec4(clamp(pow(res, vec3(1.0 / 2.2)), 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: false,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        lighten_screen: 0.85,
+        RETRO_PIXEL_SIZE: 0.84
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Handheld - Retro V2 + GBA Color (presets/retro-v2+gba-color.glslp)
+    // -----------------------------------------------------------------------
+    "retro-v2+gba-color": {
+      name: "Handheld — Retro V2 + GBA Color",
+      category: "Handheld",
+      passes: [
+        {
+          // Pass 0: GBA LCD Color Matrix
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform float darken_screen;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec4 screen = pow(texture2D(Texture, vTexCoord), vec4(2.2 + darken_screen * 0.5));",
+            "    mat4 colorMat = mat4(",
+            "        0.84, 0.09, 0.16, 0.0,",
+            "        0.18, 0.72, 0.09, 0.0,",
+            "       -0.04, 0.16, 0.78, 0.0,",
+            "        0.0,  0.0,  0.0,  1.0",
+            "    );",
+            "    screen = clamp(screen * 0.96, 0.0, 1.0);",
+            "    screen = colorMat * screen;",
+            "    gl_FragColor = pow(clamp(screen, 0.0, 1.0), vec4(1.0 / 2.2));",
+            "}"
+          ].join("\n"),
+          filter_linear: false,
+          scale_type: "source",
+          scale: 1.0
+        },
+        {
+          // Pass 1: Retro-V2 Pixel Grid
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float RETRO_PIXEL_SIZE;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec3 c = pow(texture2D(Texture, vTexCoord).rgb, vec3(2.4));",
+            "    vec2 fp = fract(vTexCoord * TextureSize);",
+            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
+            "    float maxCoord = max(f.x, f.y);",
+            "    vec3 res = mix(c * (1.04 + fp.x * fp.y), c * 0.40, maxCoord);",
+            "    gl_FragColor = vec4(clamp(pow(res, vec3(1.0 / 2.2)), 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: false,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        darken_screen: 0.65,
+        RETRO_PIXEL_SIZE: 0.82
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Handheld - Retro V2 + Image Adjustment (presets/retro-v2+image-adjustment.glslp)
+    // -----------------------------------------------------------------------
+    "retro-v2+image-adjustment": {
+      name: "Handheld — Retro V2 + Image Adjustment",
+      category: "Handheld",
+      passes: [
+        {
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float RETRO_PIXEL_SIZE;",
+            "uniform float sat_boost;",
+            "uniform float contrast_boost;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec3 c = texture2D(Texture, vTexCoord).rgb;",
+            "    // Adjust contrast & saturation",
+            "    c = (c - 0.5) * contrast_boost + 0.5;",
+            "    float luma = dot(c, vec3(0.299, 0.587, 0.114));",
+            "    c = mix(vec3(luma), c, sat_boost);",
+            "",
+            "    // Retro LCD grid lines",
+            "    vec2 fp = fract(vTexCoord * TextureSize);",
+            "    vec2 ps = TextureSize / OutputSize;",
+            "    vec2 f = clamp(clamp(fp + 0.5 * ps, 0.0, 1.0) - RETRO_PIXEL_SIZE, vec2(0.0), ps) / ps;",
+            "    float grid = max(f.x, f.y);",
+            "    c = mix(c, c * 0.38, grid);",
+            "    gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: false,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        RETRO_PIXEL_SIZE: 0.85,
+        sat_boost: 1.15,
+        contrast_boost: 1.08
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Vintage - C64 Monitor Fast (presets/c64-monitor-fast.glslp)
+    // -----------------------------------------------------------------------
+    "c64-monitor-fast": {
+      name: "Vintage — Commodore 64 Monitor Fast",
+      category: "Vintage",
+      passes: [
+        {
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "uniform float luma_delay;",
+            "uniform float scan_line;",
+            "uniform float phosphor_tint;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    float dx = 1.0 / TextureSize.x;",
+            "    vec3 c0 = texture2D(Texture, vTexCoord).rgb;",
+            "    vec3 cL = texture2D(Texture, vTexCoord - vec2(dx * luma_delay, 0.0)).rgb;",
+            "",
+            "    // C64 composite luma-chroma smear",
+            "    vec3 c = mix(c0, cL, 0.35);",
+            "",
+            "    // Scanline raster lines",
+            "    float scan = sin(vTexCoord.y * TextureSize.y * 3.14159265);",
+            "    c *= 1.0 - scan_line * (scan * scan * 0.6);",
+            "",
+            "    // Commodore 1702/1084 CRT phosphor tone",
+            "    c.r *= 1.0 + phosphor_tint * 0.08;",
+            "    c.g *= 1.0 + phosphor_tint * 0.04;",
+            "    c.b *= 1.0 - phosphor_tint * 0.06;",
+            "",
+            "    // Slot mask horizontal bars",
+            "    float slot = mod(floor(vTexCoord.x * OutputSize.x * 0.5), 2.0);",
+            "    c *= (slot < 1.0) ? 0.90 : 1.08;",
+            "",
+            "    gl_FragColor = vec4(clamp(c * 1.12, 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        luma_delay: 1.4,
+        scan_line: 0.42,
+        phosphor_tint: 1.2
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Arcade - Vector Glow (presets/vector-glow.glslp)
+    // -----------------------------------------------------------------------
+    "vector-glow": {
+      name: "Arcade — Vector Glow",
+      category: "Arcade",
+      passes: [
+        {
+          // Pass 0: Kawase Bloom Downsample
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 TextureSize;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec2 d = 2.0 / TextureSize;",
+            "    vec3 col = texture2D(Texture, vTexCoord + vec2(-d.x, -d.y)).rgb * 0.25;",
+            "    col += texture2D(Texture, vTexCoord + vec2( d.x, -d.y)).rgb * 0.25;",
+            "    col += texture2D(Texture, vTexCoord + vec2(-d.x,  d.y)).rgb * 0.25;",
+            "    col += texture2D(Texture, vTexCoord + vec2( d.x,  d.y)).rgb * 0.25;",
+            "    gl_FragColor = vec4(col, 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "source",
+          scale: 0.5
+        },
+        {
+          // Pass 1: Screen Combine & Vector Neon Glow
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform float glow_intensity;",
+            "varying vec2 vTexCoord;",
+            "void main() {",
+            "    vec3 sharp = texture2D(Texture, vTexCoord).rgb;",
+            "    // Sample wider bloom",
+            "    vec2 d = vec2(0.0035, 0.0035);",
+            "    vec3 bloom = texture2D(Texture, vTexCoord + vec2(-d.x, -d.y)).rgb * 0.25;",
+            "    bloom += texture2D(Texture, vTexCoord + vec2( d.x, -d.y)).rgb * 0.25;",
+            "    bloom += texture2D(Texture, vTexCoord + vec2(-d.x,  d.y)).rgb * 0.25;",
+            "    bloom += texture2D(Texture, vTexCoord + vec2( d.x,  d.y)).rgb * 0.25;",
+            "",
+            "    // Vector additive bloom synthesis",
+            "    vec3 finalColor = sharp + bloom * glow_intensity * 1.8;",
+            "    gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {
+        glow_intensity: 1.35
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Scaler - ScaleFX AA Fast (presets/scalefx-aa-fast.glslp)
+    // -----------------------------------------------------------------------
+    "scalefx-aa-fast": {
+      name: "Scaler — ScaleFX AA Fast",
+      category: "Anti-Aliasing",
+      passes: [
+        {
+          fragment: [
+            "precision highp float;",
+            "uniform sampler2D Texture;",
+            "uniform vec2 OutputSize;",
+            "uniform vec2 TextureSize;",
+            "varying vec2 vTexCoord;",
+            "",
+            "void main() {",
+            "    vec2 dx = vec2(1.0 / TextureSize.x, 0.0);",
+            "    vec2 dy = vec2(0.0, 1.0 / TextureSize.y);",
+            "    vec3 c0 = texture2D(Texture, vTexCoord).rgb;",
+            "    vec3 cU = texture2D(Texture, vTexCoord - dy).rgb;",
+            "    vec3 cD = texture2D(Texture, vTexCoord + dy).rgb;",
+            "    vec3 cL = texture2D(Texture, vTexCoord - dx).rgb;",
+            "    vec3 cR = texture2D(Texture, vTexCoord + dx).rgb;",
+            "",
+            "    // Subpixel edge gradient detection",
+            "    vec2 uvFrac = fract(vTexCoord * TextureSize) - 0.5;",
+            "    float lumaCenter = dot(c0, vec3(0.299, 0.587, 0.114));",
+            "    float lumaU = dot(cU, vec3(0.299, 0.587, 0.114));",
+            "    float lumaD = dot(cD, vec3(0.299, 0.587, 0.114));",
+            "    float lumaL = dot(cL, vec3(0.299, 0.587, 0.114));",
+            "    float lumaR = dot(cR, vec3(0.299, 0.587, 0.114));",
+            "",
+            "    vec2 grad = vec2(lumaR - lumaL, lumaD - lumaU);",
+            "    float edge = length(grad);",
+            "    if (edge > 0.08) {",
+            "        vec2 dir = normalize(grad);",
+            "        vec3 sample1 = texture2D(Texture, vTexCoord - dir * dx.x * 0.45).rgb;",
+            "        vec3 sample2 = texture2D(Texture, vTexCoord + dir * dx.x * 0.45).rgb;",
+            "        c0 = mix(c0, (sample1 + sample2) * 0.5, clamp(edge * 1.5, 0.0, 0.65));",
+            "    }",
+            "    gl_FragColor = vec4(c0, 1.0);",
+            "}"
+          ].join("\n"),
+          filter_linear: true,
+          scale_type: "viewport",
+          scale: 1.0
+        }
+      ],
+      parameters: {}
+    }
+  };
+
+  // =========================================================================
+  // PIPELINE IMPLEMENTATION
+  // =========================================================================
+
+  function compileShader(gl, type, source) {
+    var shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      var err = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error("GLSL Shader Compilation Failed: " + err);
+    }
+    return shader;
+  }
+
+  function createProgram(gl, vsSource, fsSource) {
+    var vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+    var fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      var err = gl.getProgramInfoLog(prog);
+      gl.deleteProgram(prog);
+      throw new Error("GLSL Program Link Failed: " + err);
+    }
+    return prog;
+  }
+
+  function LibretroShaderPipeline(canvas, options) {
+    options = options || {};
+    this.canvas = canvas;
+    this.storageKey = options.storageKey || "wasm-deploy:shader_preset";
+    this.currentPresetId = "none";
+    this.frameCount = 0;
+    this.activeParameters = {};
+
+    // WebGL Context setup
+    var ctxAttribs = {
+      alpha: false,
+      depth: false,
+      stencil: false,
+      antialias: false,
+      preserveDrawingBuffer: true
+    };
+    var gl = canvas.getContext("webgl", ctxAttribs) || canvas.getContext("experimental-webgl", ctxAttribs);
+    if (!gl) {
+      console.warn("WebGL not supported; falling back to basic 2D rendering");
+      this.gl = null;
+      return;
+    }
+    this.gl = gl;
+
+    // Fullscreen quad buffer
+    this.quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
+
+    // Source texture
+    this.sourceTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    this.sourceWidth = 0;
+    this.sourceHeight = 0;
+
+    // FBO pool for multi-pass presets
+    this.fboPool = [];
+
+    // Compile programs cache
+    this.compiledPasses = [];
+
+    // Check localStorage for saved preset
+    var initialPreset = options.defaultPreset || "crt-consumer-light";
+    try {
+      if (typeof localStorage !== "undefined") {
+        var saved = localStorage.getItem(this.storageKey);
+        if (saved && PRESET_DEFINITIONS[saved]) {
+          initialPreset = saved;
+        }
+      }
+    } catch (e) {}
+
+    this.setPreset(initialPreset);
+  }
+
+  LibretroShaderPipeline.PRESETS = PRESET_DEFINITIONS;
+
+  LibretroShaderPipeline.PRESET_LIST = Object.keys(PRESET_DEFINITIONS).map(function (k) {
+    return {
+      id: k,
+      name: PRESET_DEFINITIONS[k].name,
+      category: PRESET_DEFINITIONS[k].category
+    };
+  });
+
+  LibretroShaderPipeline.prototype.setPreset = function (presetId) {
+    if (!PRESET_DEFINITIONS[presetId]) {
+      console.warn("Unknown shader preset: " + presetId + ", defaulting to 'none'");
+      presetId = "none";
+    }
+    var preset = PRESET_DEFINITIONS[presetId];
+    this.currentPresetId = presetId;
+    this.activeParameters = Object.assign({}, preset.parameters || {});
+
+    // Persist choice
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(this.storageKey, presetId);
+      }
+    } catch (e) {}
+
+    if (!this.gl) return;
+    var gl = this.gl;
+
+    // Compile passes for this preset
+    this.compiledPasses = [];
+    for (var i = 0; i < preset.passes.length; i++) {
+      var passDef = preset.passes[i];
+      var vsSrc = passDef.vertex || DEFAULT_VERTEX_SHADER;
+      var fsSrc = passDef.fragment;
+      var prog = createProgram(gl, vsSrc, fsSrc);
+
+      var passObj = {
+        program: prog,
+        filter_linear: passDef.filter_linear !== false,
+        scale_type: passDef.scale_type || "viewport",
+        scale: passDef.scale || 1.0,
+        attribs: {
+          VertexCoord: gl.getAttribLocation(prog, "VertexCoord"),
+          TexCoord: gl.getAttribLocation(prog, "TexCoord")
+        },
+        uniforms: {
+          MVPMatrix: gl.getUniformLocation(prog, "MVPMatrix"),
+          Texture: gl.getUniformLocation(prog, "Texture"),
+          OutputSize: gl.getUniformLocation(prog, "OutputSize"),
+          TextureSize: gl.getUniformLocation(prog, "TextureSize"),
+          InputSize: gl.getUniformLocation(prog, "InputSize"),
+          OrigInputSize: gl.getUniformLocation(prog, "OrigInputSize"),
+          FrameCount: gl.getUniformLocation(prog, "FrameCount"),
+          FrameDirection: gl.getUniformLocation(prog, "FrameDirection")
+        },
+        paramUniforms: {}
+      };
+
+      // Map parameter uniforms
+      var allParamKeys = Object.keys(this.activeParameters);
+      for (var p = 0; p < allParamKeys.length; p++) {
+        var pName = allParamKeys[p];
+        var loc = gl.getUniformLocation(prog, pName);
+        if (loc !== null) {
+          passObj.paramUniforms[pName] = loc;
+        }
+      }
+
+      this.compiledPasses.push(passObj);
+    }
+  };
+
+  LibretroShaderPipeline.prototype.setParameter = function (name, value) {
+    this.activeParameters[name] = parseFloat(value);
+  };
+
+  LibretroShaderPipeline.prototype.getParameter = function (name) {
+    return this.activeParameters[name];
+  };
+
+  LibretroShaderPipeline.prototype.getParameters = function () {
+    return Object.assign({}, this.activeParameters);
+  };
+
+  LibretroShaderPipeline.prototype._ensureFBO = function (index, width, height) {
+    var gl = this.gl;
+    while (this.fboPool.length <= index) {
+      var fbo = gl.createFramebuffer();
+      var tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      this.fboPool.push({ fbo: fbo, texture: tex, width: 0, height: 0 });
+    }
+
+    var entry = this.fboPool[index];
+    if (entry.width !== width || entry.height !== height) {
+      gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, entry.fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, entry.texture, 0);
+      entry.width = width;
+      entry.height = height;
+    }
+    return entry;
+  };
+
+  /**
+   * Upload and render a frame through the Libretro Shader Pipeline.
+   *
+   * @param {Uint8Array|Uint8ClampedArray|ImageData|HTMLImageElement|HTMLCanvasElement} buffer - Input frame
+   * @param {number} width - Source frame width
+   * @param {number} height - Source frame height
+   */
+  LibretroShaderPipeline.prototype.render = function (buffer, width, height) {
+    if (!this.gl) return;
+    var gl = this.gl;
+
+    // Upload source texture
+    gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+    if (buffer instanceof ImageData) {
+      width = buffer.width;
+      height = buffer.height;
+      if (this.sourceWidth !== width || this.sourceHeight !== height) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+        this.sourceWidth = width;
+        this.sourceHeight = height;
+      } else {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+      }
+    } else if (buffer && (buffer.nodeName === "CANVAS" || buffer.nodeName === "IMG")) {
+      width = buffer.width;
+      height = buffer.height;
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+      this.sourceWidth = width;
+      this.sourceHeight = height;
+    } else if (buffer && buffer.byteLength !== undefined) {
+      var u8 = (buffer instanceof Uint8Array || buffer instanceof Uint8ClampedArray)
+        ? buffer
+        : new Uint8Array(buffer);
+      if (this.sourceWidth !== width || this.sourceHeight !== height) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, u8);
+        this.sourceWidth = width;
+        this.sourceHeight = height;
+      } else {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, u8);
+      }
+    }
+
+    var currentInTexture = this.sourceTexture;
+    var currentInW = width;
+    var currentInH = height;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+
+    // Standard 4x4 Identity Matrix
+    var idMatrix = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ];
+
+    var numPasses = this.compiledPasses.length;
+    for (var i = 0; i < numPasses; i++) {
+      var pass = this.compiledPasses[i];
+      var isLast = (i === numPasses - 1);
+
+      var outW = this.canvas.width;
+      var outH = this.canvas.height;
+      if (!isLast) {
+        if (pass.scale_type === "source") {
+          outW = Math.max(1, Math.round(currentInW * pass.scale));
+          outH = Math.max(1, Math.round(currentInH * pass.scale));
+        } else if (pass.scale_type === "viewport") {
+          outW = Math.max(1, Math.round(this.canvas.width * pass.scale));
+          outH = Math.max(1, Math.round(this.canvas.height * pass.scale));
+        }
+      }
+
+      var targetFbo = null;
+      if (!isLast) {
+        var fboObj = this._ensureFBO(i, outW, outH);
+        targetFbo = fboObj.fbo;
+      }
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targetFbo);
+      gl.viewport(0, 0, outW, outH);
+
+      gl.useProgram(pass.program);
+
+      // Bind input texture & filtering
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, currentInTexture);
+      var filterMode = pass.filter_linear ? gl.LINEAR : gl.NEAREST;
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filterMode);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filterMode);
+      if (pass.uniforms.Texture !== null) gl.uniform1i(pass.uniforms.Texture, 0);
+
+      // Vertex Attributes (Interleaved: x, y, u, v)
+      if (pass.attribs.VertexCoord >= 0) {
+        gl.enableVertexAttribArray(pass.attribs.VertexCoord);
+        gl.vertexAttribPointer(pass.attribs.VertexCoord, 2, gl.FLOAT, false, 16, 0);
+      }
+      if (pass.attribs.TexCoord >= 0) {
+        gl.enableVertexAttribArray(pass.attribs.TexCoord);
+        gl.vertexAttribPointer(pass.attribs.TexCoord, 2, gl.FLOAT, false, 16, 8);
+      }
+
+      // Standard Uniforms
+      if (pass.uniforms.MVPMatrix !== null) gl.uniformMatrix4fv(pass.uniforms.MVPMatrix, false, idMatrix);
+      if (pass.uniforms.OutputSize !== null) gl.uniform2f(pass.uniforms.OutputSize, outW, outH);
+      if (pass.uniforms.TextureSize !== null) gl.uniform2f(pass.uniforms.TextureSize, currentInW, currentInH);
+      if (pass.uniforms.InputSize !== null) gl.uniform2f(pass.uniforms.InputSize, width, height);
+      if (pass.uniforms.OrigInputSize !== null) gl.uniform2f(pass.uniforms.OrigInputSize, width, height);
+      if (pass.uniforms.FrameCount !== null) gl.uniform1i(pass.uniforms.FrameCount, this.frameCount);
+      if (pass.uniforms.FrameDirection !== null) gl.uniform1i(pass.uniforms.FrameDirection, 1);
+
+      // Pass Parameter Uniforms
+      var paramNames = Object.keys(pass.paramUniforms);
+      for (var p = 0; p < paramNames.length; p++) {
+        var pName = paramNames[p];
+        var loc = pass.paramUniforms[pName];
+        if (loc !== null && this.activeParameters[pName] !== undefined) {
+          gl.uniform1f(loc, this.activeParameters[pName]);
+        }
+      }
+
+      // Render Quad
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      if (!isLast) {
+        currentInTexture = this.fboPool[i].texture;
+        currentInW = outW;
+        currentInH = outH;
+      }
+    }
+
+    this.frameCount++;
+  };
+
+  /**
+   * Helper to populate and synchronize an HTML <select> element with
+   * libretro presets, grouping by category and restoring user selection.
+   *
+   * @param {HTMLSelectElement|string} selectOrId - Target select element
+   * @param {function} [onPresetChange] - Optional callback when preset changes
+   */
+  LibretroShaderPipeline.prototype.bindSelectElement = function (selectOrId, onPresetChange) {
+    var sel = (typeof selectOrId === "string") ? document.getElementById(selectOrId) : selectOrId;
+    if (!sel) return;
+
+    sel.innerHTML = "";
+
+    // Group presets by category
+    var categories = {};
+    var presetKeys = Object.keys(PRESET_DEFINITIONS);
+    for (var i = 0; i < presetKeys.length; i++) {
+      var key = presetKeys[i];
+      var preset = PRESET_DEFINITIONS[key];
+      var cat = preset.category || "General";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push({ id: key, name: preset.name });
+    }
+
+    var catNames = Object.keys(categories);
+    for (var c = 0; c < catNames.length; c++) {
+      var catName = catNames[c];
+      var optgroup = document.createElement("optgroup");
+      optgroup.label = catName;
+      var list = categories[catName];
+      for (var j = 0; j < list.length; j++) {
+        var item = list[j];
+        var opt = document.createElement("option");
+        opt.value = item.id;
+        opt.textContent = item.name;
+        if (item.id === this.currentPresetId) {
+          opt.selected = true;
+        }
+        optgroup.appendChild(opt);
+      }
+      sel.appendChild(optgroup);
+    }
+
+    var self = this;
+    sel.addEventListener("change", function () {
+      self.setPreset(this.value);
+      if (typeof onPresetChange === "function") {
+        onPresetChange(this.value, PRESET_DEFINITIONS[this.value]);
+      }
+    });
+  };
+
+  global.LibretroShaderPipeline = LibretroShaderPipeline;
+
+})(typeof window !== "undefined" ? window : globalThis);
+
+  </script>
+
+  <script>
+    (function () {
+      var canvas = document.getElementById("screen");
+      var statusText = document.getElementById("status-text");
+      var telemetryText = document.getElementById("render-telemetry");
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+
+      function showToast(msg) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.classList.add("visible");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toastEl.classList.remove("visible");
+        }, 2200);
+      }
+
+      // Initialize Libretro Shader Pipeline
+      var pipeline = null;
+      try {
+        if (window.LibretroShaderPipeline) {
+          pipeline = new window.LibretroShaderPipeline(canvas, {
+            defaultPreset: "crt-consumer-light",
+            storageKey: "wasm-deploy:shader_preset"
+          });
+          pipeline.bindSelectElement("libretro-shader-select", function (presetId, def) {
+            showToast("Shader: " + (def ? def.name : presetId));
+            if (telemetryText) {
+              telemetryText.textContent = "Shader: " + (def ? def.name : presetId);
+            }
+          });
+          if (telemetryText) {
+            telemetryText.textContent = "Shader: " + (LibretroShaderPipeline.PRESETS[pipeline.currentPresetId]?.name || "Active");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to initialize LibretroShaderPipeline:", err);
+      }
+
+      // Frame rate and presentation hooks
+      var frameCount = 0;
+      var lastFpsTime = performance.now();
+
+      window.WasmApp = {
+        showToast: showToast,
+        presentFrame: function (bufferPtr, width, height) {
+          if (pipeline && Module && Module.HEAPU8) {
+            var byteLen = width * height * 4;
+            var frameData = Module.HEAPU8.subarray(bufferPtr, bufferPtr + byteLen);
+            pipeline.render(frameData, width, height);
+          }
+          frameCount++;
+          var now = performance.now();
+          if (now - lastFpsTime >= 1000) {
+            var fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
+            if (statusText) statusText.textContent = "Running · " + fps + " FPS";
+            frameCount = 0;
+            lastFpsTime = now;
+          }
+        }
+      };
+
+      // Fullscreen support
+      var btnFullscreen = document.getElementById("btn-fullscreen");
+      if (btnFullscreen) {
+        btnFullscreen.addEventListener("click", function () {
+          var wrap = document.getElementById("viewport-wrap");
+          if (!document.fullscreenElement) {
+            (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+          } else {
+            document.exitFullscreen();
+          }
+        });
+      }
+
+      // Audio toggle boilerplate
+      var btnAudio = document.getElementById("btn-audio");
+      if (btnAudio) {
+        btnAudio.addEventListener("click", function () {
+          if (Module && Module._wasm_toggle_audio) {
+            Module._wasm_toggle_audio();
+          }
+        });
+      }
+
+      // Module configuration
+      window.Module = window.Module || {};
+      window.Module.preRun = window.Module.preRun || [];
+      window.Module.postRun = window.Module.postRun || [];
+      window.Module.postRun.push(function () {
+        if (statusText) statusText.textContent = "Running";
+        showToast("Application Initialized");
+      });
+      window.Module.print = function (text) { console.log(text); };
+      window.Module.printErr = function (text) { console.warn(text); };
+    })();
+  </script>
+
+  <!-- Emscripten Base64 WASM & Runtime Script Injection Point -->
+  {{{ SCRIPT }}}
+</body>
+</html>

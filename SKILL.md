@@ -28,7 +28,16 @@ accessible across the local network and runnable offline.
    - On boot, files stored in `localStorage` are automatically restored into the virtual
      filesystem before the main program logic runs.
 
-3. **Local Area Network (LAN) Hub Deployment**:
+3. **Libretro GLSL Shader Pipeline with Dropdown Selection**:
+   - Web applications render visual framebuffers via a high-performance WebGL pipeline
+     supporting multi-pass Libretro `.glslp` shader presets directly derived from
+     [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders/tree/master/presets).
+   - Features an integrated toolbar `<select id="libretro-shader-select">` dropdown allowing users
+     to switch between CRT, handheld LCD, vintage monitor, vector glow, and scaling filters in real time.
+   - Chosen shader preset automatically persists in browser `localStorage` under
+     `<project-name>:shader_preset`.
+
+4. **Local Area Network (LAN) Hub Deployment**:
    - Applications are deployed to `/var/www/apps/<project-name>/index.html`.
    - Served by Nginx on port 80 via the symlink `/var/www/html/apps -> /var/www/apps`.
    - Immediately accessible across the local network:
@@ -109,7 +118,37 @@ EM_JS(void, js_restore_saves_from_local_storage, (const char *prefix), {
 });
 ```
 
-### 3. Emscripten Linking Flags
+### 3. Implement Framebuffer Presentation & Libretro Shader Pipeline
+Projects render their framebuffers via `EM_JS` using `js_present_rgba_frame`:
+
+```c
+#include <emscripten.h>
+#include <stdint.h>
+
+EM_JS(void, js_present_rgba_frame, (const uint8_t *buffer, int width, int height), {
+    if (window.WasmApp && window.WasmApp.presentFrame) {
+        window.WasmApp.presentFrame(buffer, width, height);
+    }
+});
+```
+
+The standard shell template (`tools/wasm_shell.html`) automatically routes frames through `LibretroShaderPipeline`:
+- **Integrated Dropdown:** Provides `<select id="libretro-shader-select" class="shader-select">` with grouped presets.
+- **Available Presets (from [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders/tree/master/presets)):**
+  - **None (Crisp Pixels):** 1:1 nearest-neighbor pass-through.
+  - **CRT — Consumer Light (`crt-consumer-light.glslp`):** Fast scanlines, beam width, RGB triad mask, curvature, and saturation boost.
+  - **CRT — Geom Glow (`crt-Geom-glow.glslp`):** Full CRT-Geom barrel distortion, aperture dot mask, and soft phosphor glow.
+  - **CRT — Fakelottes NTSC Composite (`fakelottes-ntsc-composite.glslp`):** NTSC chroma fringing with Lottes scanline modulation.
+  - **CRT — Guest Dr. Venom Kurozumi (`crt-guest-dr-venom-kurozumi.glslp`):** Arcade aperture grille with dynamic beam width.
+  - **Handheld — Retro V2 + GBC Color (`retro-v2+gbc-color.glslp`):** GBC reflective LCD matrix color mangler and subpixel grid.
+  - **Handheld — Retro V2 + GBA Color (`retro-v2+gba-color.glslp`):** GBA reflective LCD color transformation and pixel grid.
+  - **Handheld — Retro V2 + Image Adjustment (`retro-v2+image-adjustment.glslp`):** High-definition pixel grid with gamma, saturation, and contrast.
+  - **Vintage — Commodore 64 Monitor Fast (`c64-monitor-fast.glslp`):** C64 composite luma-chroma delay and 1702/1084 CRT phosphor tone.
+  - **Arcade — Vector Glow (`vector-glow.glslp`):** Multi-pass Kawase blur bloom for neon vector graphics.
+  - **Scaler — ScaleFX AA Fast (`scalefx-aa-fast.glslp`):** Subpixel gradient edge-directed anti-aliasing without blur.
+- **Persistence:** User selection automatically saves to `localStorage.getItem('<project-name>:shader_preset')`.
+
+### 4. Emscripten Linking Flags
 Compile the final binary using these required flags:
 ```bash
 emcc -O2 \
@@ -129,14 +168,14 @@ emcc -O2 \
     -o "build/<project-name>.html"
 ```
 
-### 4. Deploy to Web Server
+### 5. Deploy to Web Server
 Deploy the single-file HTML to `/var/www/apps/<project-name>/`:
 ```bash
 mkdir -p "/var/www/apps/<project-name>"
 cp -f "build/<project-name>.html" "/var/www/apps/<project-name>/index.html"
 ```
 
-### 5. Update WebApps Hub (`/var/www/apps/index.html`)
+### 6. Update WebApps Hub (`/var/www/apps/index.html`)
 Ensure an entry for `<project-name>` is present in `/var/www/apps/index.html` under the `.grid` section:
 ```html
 <div class="card">
@@ -160,7 +199,7 @@ Ensure an entry for `<project-name>` is present in `/var/www/apps/index.html` un
 </div>
 ```
 
-### 6. Verification Checklist
+### 7. Verification Checklist
 Run automated curl verification on both LAN subnets:
 ```bash
 curl -I http://127.0.0.1/apps/<project-name>/

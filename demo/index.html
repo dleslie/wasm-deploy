@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Libretro Shader Presets — Interactive Demo & Test Suite</title>
+  <style>
+    :root {
+      --bg: #0b0908;
+      --card-bg: #161210;
+      --border: #3a2618;
+      --gold: #d4af37;
+      --blood: #a8201a;
+      --text: #e6dcc8;
+      --text-muted: #9a8c76;
+      --green: #3fb950;
+      --accent: #58a6ff;
+      --font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 15%, #1d1410 0%, var(--bg) 75%);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 1040px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .brand h1 {
+      font-size: 20px;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #2a1812;
+      border: 1px solid #59251a;
+      color: #f2b8a2;
+      font-weight: 600;
+    }
+    .badge.green {
+      background: #1b2e1a;
+      border-color: #2e622b;
+      color: #92e68a;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    label {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    select, button {
+      background: #211915;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 5px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    select:hover, button:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: #2b201a;
+    }
+    select.shader-select {
+      background: #1a1411;
+      border-color: #634327;
+      color: var(--gold);
+      font-weight: 600;
+      padding: 6px 12px;
+    }
+    select.shader-select optgroup {
+      background: #161210;
+      color: var(--text-muted);
+      font-weight: bold;
+    }
+    .viewport-box {
+      position: relative;
+      background: #000;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 12px 38px rgba(0, 0, 0, 0.85), 0 0 24px rgba(168, 32, 26, 0.2);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    canvas#viewport {
+      width: min(94vw, 960px);
+      height: calc(min(94vw, 960px) * (224 / 320));
+      max-height: 68vh;
+      max-width: calc(68vh * (320 / 224));
+      display: block;
+      background: #000;
+      image-rendering: pixelated;
+    }
+    #toast {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 12, 10, 0.94);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 10;
+    }
+    #toast.visible { opacity: 1; }
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-size: 12px;
+    }
+    .card-title {
+      color: var(--gold);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .param-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .param-row span {
+      flex: 1;
+      color: var(--text-muted);
+    }
+    .param-row input[type="range"] {
+      flex: 1.2;
+      margin: 0 10px;
+      accent-color: var(--gold);
+    }
+    .param-val {
+      font-weight: bold;
+      color: var(--gold);
+      min-width: 44px;
+      text-align: right;
+    }
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      color: var(--text-muted);
+    }
+    .stats-val {
+      color: var(--text);
+      font-weight: 600;
+    }
+    a.btn-back {
+      display: inline-block;
+      text-decoration: none;
+      background: #211915;
+      color: var(--gold);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    a.btn-back:hover {
+      background: #2b201a;
+      border-color: var(--gold);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <h1>Libretro Shaders <span class="badge green">Live WebGL</span></h1>
+        <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+          Multi-pass GLSL presets directly from <a href="https://github.com/libretro/glsl-shaders/tree/master/presets" target="_blank" style="color:var(--accent);">libretro/glsl-shaders</a>
+        </p>
+      </div>
+      <div class="toolbar">
+        <label>
+          <span>Pattern:</span>
+          <select id="pattern-select">
+            <option value="rpg">16-Bit Animated RPG Scene</option>
+            <option value="smpte">SMPTE Color Bars & Ramps</option>
+            <option value="grid">High-Contrast Geometry Grid</option>
+            <option value="font">Typography & Dialogue Matrix</option>
+          </select>
+        </label>
+        <label>
+          <span>Preset:</span>
+          <select id="libretro-shader-select" class="shader-select"></select>
+        </label>
+        <button id="btn-fullscreen">Fullscreen</button>
+        <a class="btn-back" href="../">Back to Hub</a>
+      </div>
+    </header>
+
+    <div class="viewport-box" id="viewport-wrap">
+      <canvas id="viewport" width="320" height="224"></canvas>
+      <div id="toast">Preset Loaded</div>
+    </div>
+
+    <div class="control-grid">
+      <!-- Live Parameters Panel -->
+      <div class="card">
+        <div class="card-title">
+          <span>Shader Parameters</span>
+          <button id="btn-reset-params" style="padding:2px 6px; font-size:11px;">Reset Defaults</button>
+        </div>
+        <div id="params-container">
+          <div style="color:var(--text-muted); font-size:11px;">Select a shader preset to adjust parameters.</div>
+        </div>
+      </div>
+
+      <!-- Real-time Diagnostics -->
+      <div class="card">
+        <div class="card-title">
+          <span>Engine Diagnostics</span>
+          <span id="fps-badge" class="badge">60 FPS</span>
+        </div>
+        <div class="stats-row">
+          <span>Active Preset:</span>
+          <span class="stats-val" id="diag-preset">None</span>
+        </div>
+        <div class="stats-row">
+          <span>Passes / FBOs:</span>
+          <span class="stats-val" id="diag-passes">1 pass</span>
+        </div>
+        <div class="stats-row">
+          <span>Input Framebuffer:</span>
+          <span class="stats-val">320 × 224 (RGBA)</span>
+        </div>
+        <div class="stats-row">
+          <span>Output Canvas:</span>
+          <span class="stats-val" id="diag-output">960 × 672</span>
+        </div>
+        <div class="stats-row">
+          <span>Frame Time:</span>
+          <span class="stats-val" id="diag-ftime">0.2 ms</span>
+        </div>
+        <div class="stats-row">
+          <span>Persistence:</span>
+          <span class="stats-val" style="color:#7ce080;">localStorage synced</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Libretro Pipeline Script -->
+  <script src="../tools/libretro-pipeline.js"></script>
+
+  <!-- Interactive Test Pattern Generator & Demo Logic -->
+  <script>
+    (function () {
+      "use strict";
+
+      var canvas = document.getElementById("viewport");
+      var patternSelect = document.getElementById("pattern-select");
+      var paramsContainer = document.getElementById("params-container");
+      var btnResetParams = document.getElementById("btn-reset-params");
+      var diagPreset = document.getElementById("diag-preset");
+      var diagPasses = document.getElementById("diag-passes");
+      var diagOutput = document.getElementById("diag-output");
+      var diagFtime = document.getElementById("diag-ftime");
+      var fpsBadge = document.getElementById("fps-badge");
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+
+      function showToast(msg) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.classList.add("visible");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.classList.remove("visible"); }, 2000);
+      }
+
+      // Initialize Pipeline
+      var pipeline = new window.LibretroShaderPipeline(canvas, {
+        defaultPreset: "crt-consumer-light",
+        storageKey: "wasm-deploy:demo_shader_preset"
+      });
+
+      function updateParamSliders() {
+        paramsContainer.innerHTML = "";
+        var params = pipeline.getParameters();
+        var keys = Object.keys(params);
+        if (keys.length === 0) {
+          paramsContainer.innerHTML = "<div style='color:var(--text-muted); font-size:11px;'>This preset runs on fixed parameters.</div>";
+          return;
+        }
+
+        keys.forEach(function (key) {
+          var row = document.createElement("div");
+          row.className = "param-row";
+
+          var label = document.createElement("span");
+          label.textContent = key;
+
+          var valSpan = document.createElement("span");
+          valSpan.className = "param-val";
+          var currentVal = params[key];
+          valSpan.textContent = (typeof currentVal === "number") ? currentVal.toFixed(2) : currentVal;
+
+          var slider = document.createElement("input");
+          slider.type = "range";
+          slider.min = "0.0";
+          slider.max = (currentVal > 2.0 ? "5.0" : "2.0");
+          slider.step = "0.01";
+          slider.value = currentVal;
+
+          slider.addEventListener("input", function () {
+            var val = parseFloat(this.value);
+            valSpan.textContent = val.toFixed(2);
+            pipeline.setParameter(key, val);
+          });
+
+          row.appendChild(label);
+          row.appendChild(slider);
+          row.appendChild(valSpan);
+          paramsContainer.appendChild(row);
+        });
+      }
+
+      pipeline.bindSelectElement("libretro-shader-select", function (presetId, def) {
+        showToast("Shader: " + (def ? def.name : presetId));
+        if (diagPreset) diagPreset.textContent = def ? def.name : presetId;
+        if (diagPasses) diagPasses.textContent = def.passes.length + " pass" + (def.passes.length > 1 ? "es" : "");
+        updateParamSliders();
+      });
+
+      var activeDef = LibretroShaderPipeline.PRESETS[pipeline.currentPresetId];
+      if (diagPreset) diagPreset.textContent = activeDef ? activeDef.name : pipeline.currentPresetId;
+      if (diagPasses) diagPasses.textContent = activeDef ? activeDef.passes.length + " pass" + (activeDef.passes.length > 1 ? "es" : "") : "1 pass";
+      updateParamSliders();
+
+      if (btnResetParams) {
+        btnResetParams.addEventListener("click", function () {
+          pipeline.setPreset(pipeline.currentPresetId);
+          updateParamSliders();
+          showToast("Parameters reset to preset defaults");
+        });
+      }
+
+      // Offscreen 320x224 Canvas for Test Pattern Generation
+      var srcCanvas = document.createElement("canvas");
+      srcCanvas.width = 320;
+      srcCanvas.height = 224;
+      var ctx = srcCanvas.getContext("2d", { alpha: false });
+
+      // Pattern 1: Animated 16-Bit RPG Scene
+      var tick = 0;
+      function drawRpgScene(t) {
+        // Dark dungeon floor
+        ctx.fillStyle = "#181412";
+        ctx.fillRect(0, 0, 320, 224);
+
+        // Brick wall backdrop
+        for (var y = 0; y < 64; y += 12) {
+          for (var x = 0; x < 320; x += 24) {
+            var offset = (y / 12) % 2 === 0 ? 0 : 12;
+            var bx = x + offset;
+            ctx.fillStyle = "#2c221b";
+            ctx.fillRect(bx, y, 22, 10);
+            ctx.fillStyle = "#1e1713";
+            ctx.fillRect(bx, y, 22, 1);
+            ctx.fillRect(bx, y, 1, 10);
+          }
+        }
+
+        // Torches with flickering fire
+        var torchX = [48, 160, 272];
+        torchX.forEach(function (tx) {
+          ctx.fillStyle = "#5c3d28";
+          ctx.fillRect(tx - 2, 44, 4, 18);
+          ctx.fillStyle = "#8a5836";
+          ctx.fillRect(tx - 3, 42, 6, 4);
+
+          // Fire flicker
+          var flick = Math.sin(t * 0.15 + tx) * 2;
+          ctx.fillStyle = "#d4af37";
+          ctx.beginPath();
+          ctx.arc(tx, 38 + flick, 6 + Math.cos(t * 0.2), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#a8201a";
+          ctx.beginPath();
+          ctx.arc(tx, 37 + flick, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Floor tiles
+        for (var fy = 64; fy < 200; fy += 16) {
+          for (var fx = 0; fx < 320; fx += 16) {
+            ctx.fillStyle = ((fx / 16 + fy / 16) % 2 === 0) ? "#201a16" : "#251e19";
+            ctx.fillRect(fx, fy, 15, 15);
+          }
+        }
+
+        // Animated hero character
+        var heroX = 148 + Math.sin(t * 0.04) * 40;
+        var heroY = 120;
+        var walkCycle = Math.floor((t * 0.15) % 4);
+
+        // Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.ellipse(heroX + 12, heroY + 28, 10, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hero armor & cape
+        ctx.fillStyle = "#a8201a"; // Cape
+        ctx.fillRect(heroX + 2, heroY + 10, 6, 14);
+        ctx.fillStyle = "#4a6984"; // Steel armor
+        ctx.fillRect(heroX + 6, heroY + 8, 12, 14);
+        ctx.fillStyle = "#d4af37"; // Gold helm
+        ctx.fillRect(heroX + 7, heroY + 2, 10, 8);
+        ctx.fillStyle = "#ffd6cc"; // Face slit
+        ctx.fillRect(heroX + 9, heroY + 6, 6, 2);
+        ctx.fillStyle = "#2a1812"; // Boots
+        ctx.fillRect(heroX + 6 + (walkCycle === 1 ? 2 : 0), heroY + 22, 4, 6);
+        ctx.fillRect(heroX + 14 - (walkCycle === 3 ? 2 : 0), heroY + 22, 4, 6);
+
+        // Sword blade
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(heroX + 20, heroY + 6, 2, 16);
+        ctx.fillStyle = "#d4af37";
+        ctx.fillRect(heroX + 18, heroY + 18, 6, 2);
+
+        // Treasure chest with pulsating glow
+        var chestGlow = 0.5 + Math.sin(t * 0.08) * 0.5;
+        ctx.fillStyle = "#694726";
+        ctx.fillRect(230, 110, 24, 18);
+        ctx.fillStyle = "#d4af37";
+        ctx.fillRect(230, 116, 24, 3);
+        ctx.fillStyle = "rgba(255, 215, 0, " + (0.3 + chestGlow * 0.4) + ")";
+        ctx.fillRect(239, 115, 6, 5);
+
+        // Bottom status HUD
+        ctx.fillStyle = "#0c0a09";
+        ctx.fillRect(0, 196, 320, 28);
+        ctx.strokeStyle = "#3a2618";
+        ctx.strokeRect(0, 196, 320, 28);
+
+        ctx.font = "8px monospace";
+        ctx.fillStyle = "#d4af37";
+        ctx.fillText("HERO LV.24", 10, 208);
+        ctx.fillStyle = "#7ce080";
+        ctx.fillText("HP 240/240", 80, 208);
+        ctx.fillStyle = "#58a6ff";
+        ctx.fillText("MP 128/128", 160, 208);
+        ctx.fillStyle = "#f2b8a2";
+        ctx.fillText("GOLD 15,420", 240, 208);
+
+        // Health bar
+        ctx.fillStyle = "#36130e";
+        ctx.fillRect(80, 212, 60, 5);
+        ctx.fillStyle = "#22c55e";
+        ctx.fillRect(80, 212, 54, 5);
+      }
+
+      // Pattern 2: SMPTE Color Bars & Ramps
+      function drawSmpteBars() {
+        var colors = [
+          "#c0c0c0", "#c0c000", "#00c0c0", "#00c000",
+          "#c000c0", "#c00000", "#0000c0"
+        ];
+        var barW = 320 / 7;
+        for (var i = 0; i < 7; i++) {
+          ctx.fillStyle = colors[i];
+          ctx.fillRect(i * barW, 0, barW + 1, 140);
+        }
+
+        // Middle small bars
+        var midColors = ["#0000c0", "#131313", "#c000c0", "#131313", "#00c0c0", "#131313", "#c0c0c0"];
+        for (var j = 0; j < 7; j++) {
+          ctx.fillStyle = midColors[j];
+          ctx.fillRect(j * barW, 140, barW + 1, 24);
+        }
+
+        // Grayscale ramp at bottom
+        for (var x = 0; x < 320; x++) {
+          var v = Math.floor((x / 320) * 255);
+          ctx.fillStyle = "rgb(" + v + "," + v + "," + v + ")";
+          ctx.fillRect(x, 164, 1, 40);
+        }
+
+        // Black PLUGE bars
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 204, 320, 20);
+        ctx.fillStyle = "#141414";
+        ctx.fillRect(60, 204, 40, 20);
+        ctx.fillStyle = "#242424";
+        ctx.fillRect(160, 204, 40, 20);
+        ctx.fillStyle = "#383838";
+        ctx.fillRect(260, 204, 40, 20);
+      }
+
+      // Pattern 3: Geometry & Convergence Grid
+      function drawGrid() {
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, 320, 224);
+
+        // White 16x16 grid
+        ctx.strokeStyle = "#333333";
+        ctx.lineWidth = 1;
+        for (var x = 0; x <= 320; x += 16) {
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, 0);
+          ctx.lineTo(x + 0.5, 224);
+          ctx.stroke();
+        }
+        for (var y = 0; y <= 224; y += 16) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(320, y + 0.5);
+          ctx.stroke();
+        }
+
+        // Center crosshairs
+        ctx.strokeStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(160.5, 0); ctx.lineTo(160.5, 224);
+        ctx.moveTo(0, 112.5); ctx.lineTo(320, 112.5);
+        ctx.stroke();
+
+        // Concentric circles
+        for (var r = 24; r <= 100; r += 24) {
+          ctx.strokeStyle = (r === 96) ? "#d4af37" : "#58a6ff";
+          ctx.beginPath();
+          ctx.arc(160, 112, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Corner cross markers
+        var corners = [[16, 16], [304, 16], [16, 208], [304, 208]];
+        ctx.strokeStyle = "#a8201a";
+        corners.forEach(function (pt) {
+          ctx.beginPath();
+          ctx.moveTo(pt[0] - 8, pt[1]); ctx.lineTo(pt[0] + 8, pt[1]);
+          ctx.moveTo(pt[0], pt[1] - 8); ctx.lineTo(pt[0], pt[1] + 8);
+          ctx.stroke();
+        });
+      }
+
+      // Pattern 4: Typography & Dialogue Matrix
+      function drawFontMatrix() {
+        ctx.fillStyle = "#121016";
+        ctx.fillRect(0, 0, 320, 224);
+
+        ctx.fillStyle = "#251e2b";
+        ctx.fillRect(16, 16, 288, 192);
+        ctx.strokeStyle = "#d4af37";
+        ctx.strokeRect(16, 16, 288, 192);
+
+        ctx.font = "10px monospace";
+        ctx.fillStyle = "#d4af37";
+        ctx.fillText("LIBRETRO SHADER PRESET VERIFICATION", 28, 38);
+
+        ctx.font = "8px monospace";
+        ctx.fillStyle = "#e6dcc8";
+        ctx.fillText("The quick brown fox jumps over the lazy dog.", 28, 58);
+        ctx.fillText("0123456789 !@#$%^&*() _+-=[]{}|;':\",./<>?", 28, 72);
+
+        ctx.fillStyle = "#3fb950";
+        ctx.fillText("Pass 0: Multi-channel subpixel matrix calculation", 28, 92);
+        ctx.fillStyle = "#58a6ff";
+        ctx.fillText("Pass 1: CRT barrel curvature, beam dynamics & mask", 28, 106);
+
+        // Contrast squares
+        var grays = ["#111", "#333", "#555", "#777", "#999", "#bbb", "#ddd", "#fff"];
+        for (var i = 0; i < 8; i++) {
+          ctx.fillStyle = grays[i];
+          ctx.fillRect(28 + i * 32, 126, 28, 20);
+        }
+
+        ctx.fillStyle = "#a8201a";
+        ctx.fillText("PicoDrive / Libretro GLSL Spec: 320x224 Standard", 28, 168);
+        ctx.fillStyle = "#9a8c76";
+        ctx.fillText("Zero-dependency WebGL pipeline synced with localStorage", 28, 182);
+      }
+
+      // Render Loop
+      var lastTime = performance.now();
+      var frames = 0;
+      var fpsLast = performance.now();
+
+      function loop(now) {
+        requestAnimationFrame(loop);
+        tick++;
+
+        var p = patternSelect ? patternSelect.value : "rpg";
+        if (p === "smpte") {
+          drawSmpteBars();
+        } else if (p === "grid") {
+          drawGrid();
+        } else if (p === "font") {
+          drawFontMatrix();
+        } else {
+          drawRpgScene(tick);
+        }
+
+        // Render through Libretro WebGL Shader Pipeline
+        var t0 = performance.now();
+        pipeline.render(srcCanvas, 320, 224);
+        var t1 = performance.now();
+
+        frames++;
+        if (now - fpsLast >= 1000) {
+          var fps = Math.round((frames * 1000) / (now - fpsLast));
+          if (fpsBadge) fpsBadge.textContent = fps + " FPS";
+          if (diagFtime) diagFtime.textContent = (t1 - t0).toFixed(2) + " ms";
+          frames = 0;
+          fpsLast = now;
+        }
+
+        if (diagOutput) {
+          diagOutput.textContent = canvas.width + " × " + canvas.height;
+        }
+      }
+
+      // Fullscreen support
+      var btnFullscreen = document.getElementById("btn-fullscreen");
+      if (btnFullscreen) {
+        btnFullscreen.addEventListener("click", function () {
+          var wrap = document.getElementById("viewport-wrap");
+          if (!document.fullscreenElement) {
+            (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+          } else {
+            document.exitFullscreen();
+          }
+        });
+      }
+
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

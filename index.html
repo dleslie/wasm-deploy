@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WASM Deploy — WebApps Hub & Libretro Shader Pipeline</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-bright: #f0f6fc;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --purple: #bc8cff;
+      --gold: #d4af37;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-main h1 {
+      color: var(--text-bright);
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 12px;
+      background: #1f6feb26;
+      color: var(--accent);
+      border: 1px solid #388bfd4d;
+    }
+    .badge.green {
+      background: #23863626;
+      color: var(--green);
+      border-color: #2ea0434d;
+    }
+    .badge.gold {
+      background: #3a2814;
+      color: var(--gold);
+      border-color: #735020;
+    }
+    .network-info {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--text-bright);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      flex: 1;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      background: #21262d;
+      border-radius: 4px;
+      color: var(--text);
+    }
+    .btn {
+      display: inline-block;
+      background: #238636;
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      transition: background 0.15s ease;
+    }
+    .btn:hover {
+      background: #2ea043;
+    }
+    .btn.secondary {
+      background: #21262d;
+      color: var(--text-bright);
+      border: 1px solid var(--border);
+    }
+    .btn.secondary:hover {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+    .section-title {
+      font-size: 18px;
+      color: var(--text-bright);
+      margin-bottom: 14px;
+      font-weight: 600;
+    }
+    .guide-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 30px;
+    }
+    .guide-box code {
+      font-family: var(--mono);
+      background: #0d1117;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-bright);
+    }
+    .shader-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .shader-item {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .shader-item-title {
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .shader-item-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-main">
+        <h1>WASM Deploy Hub <span class="badge gold">v1.1.0</span></h1>
+        <p style="color:var(--text-muted); font-size:13px; margin-top:4px;">
+          Standard compilation and deployment suite for zero-dependency WebAssembly applications with Libretro shaders.
+        </p>
+      </div>
+      <div class="network-info">
+        Local Network WebApps Hub
+      </div>
+    </header>
+
+    <div class="section-title">Deployed Suite Pages</div>
+    <div class="grid">
+      <!-- Shader Interactive Demo Card -->
+      <div class="card">
+        <div>
+          <div class="card-title">
+            <span>Shader Presets Demo</span>
+            <span class="badge green">Interactive</span>
+          </div>
+          <div class="card-desc">
+            Live WebGL test harness demonstrating all Libretro shader presets with selectable test patterns (16-bit RPG animation, SMPTE color bars, geometry grid, and font matrix), real-time parameter tuning sliders, and FPS telemetry.
+          </div>
+          <div class="tags">
+            <span class="tag">Libretro</span>
+            <span class="tag">WebGL</span>
+            <span class="tag">GLSL Shaders</span>
+            <span class="tag">Multi-Pass</span>
+            <span class="tag">localStorage</span>
+          </div>
+        </div>
+        <div class="btn-group">
+          <a class="btn" href="./demo/" style="flex:1;">Launch Shader Demo</a>
+        </div>
+      </div>
+
+      <!-- Root Hub Navigation Card -->
+      <div class="card">
+        <div>
+          <div class="card-title">
+            <span>WebApps Hub Root</span>
+            <span class="badge">Local Network</span>
+          </div>
+          <div class="card-desc">
+            Return to the central WebApps Hub dashboard featuring Diabolical32X, Sega Genesis/CD/32X Dev Suite, and TTRPG Assistant.
+          </div>
+          <div class="tags">
+            <span class="tag">Dashboard</span>
+            <span class="tag">Nginx</span>
+            <span class="tag">Port 80</span>
+          </div>
+        </div>
+        <div class="btn-group">
+          <a class="btn secondary" href="../" style="flex:1;">Return to Hub</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Supported Libretro Shader Presets</div>
+    <div class="guide-box">
+      <p>
+        Integrated directly from <a href="https://github.com/libretro/glsl-shaders/tree/master/presets" target="_blank" style="color:var(--accent);">libretro/glsl-shaders/presets</a>, available as a dropdown selectable in <code>tools/wasm_shell.html</code>:
+      </p>
+      <div class="shader-list">
+        <div class="shader-item">
+          <div class="shader-item-title">None (Crisp Pixels)</div>
+          <div class="shader-item-desc">Pure unadorned nearest-neighbor pass-through for exact pixel art representation.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">CRT — Consumer Light</div>
+          <div class="shader-item-desc">Fast scanlines, curvature, convergence offset, and phosphor triad mask simulation.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">CRT — Geom Glow</div>
+          <div class="shader-item-desc">Authentic barrel curvature, aperture dot mask, and soft phosphor bloom blur.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">CRT — Fakelottes NTSC Composite</div>
+          <div class="shader-item-desc">NTSC composite chroma phase delay combined with Lottes sine scanline modulation.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">CRT — Guest Dr. Venom Kurozumi</div>
+          <div class="shader-item-desc">High-end arcade Trinitron aperture grille with dynamic beam width modulation.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Handheld — Retro V2 + GBC Color</div>
+          <div class="shader-item-desc">Game Boy Color reflective LCD color matrix transformation and subpixel grid.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Handheld — Retro V2 + GBA Color</div>
+          <div class="shader-item-desc">Game Boy Advance reflective screen color correction with Hyllian LCD subpixels.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Handheld — Retro V2 + Image Adj.</div>
+          <div class="shader-item-desc">Sharp retro LCD grid paired with saturation, contrast, and gamma adjustment.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Vintage — Commodore 64 Monitor</div>
+          <div class="shader-item-desc">Iconic C64 composite smear, slot mask, and 1702/1084 CRT phosphor tone.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Arcade — Vector Glow</div>
+          <div class="shader-item-desc">Multi-pass Kawase blur bloom for Asteroids/Vectrex style neon phosphor vectors.</div>
+        </div>
+        <div class="shader-item">
+          <div class="shader-item-title">Scaler — ScaleFX AA Fast</div>
+          <div class="shader-item-desc">Subpixel gradient edge-directed anti-aliasing without blurry bilinear filtering.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
