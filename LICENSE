@@ -1,0 +1,45 @@
+MIT License
+
+Copyright (c) 2026 Dan Leslie <dan@ironoxide.ca>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+### Third-Party Notices & Attributions
+
+This project includes algorithms, shader models, and runtime templates derived from or inspired by the following open-source projects:
+
+1. **Libretro GLSL Shaders**
+   - Source: https://github.com/libretro/glsl-shaders
+   - The WebGL shader presets implemented in `tools/libretro-pipeline.js` and `tools/wasm_shell.html` are WebGL GLSL ports derived from the Libretro shader collection created by the Libretro community.
+   - Individual shader algorithms and presets are credited to their respective authors:
+     - `crt-consumer-light`: DariusG
+     - `crt-geom-glow`: cgwg, hunterk
+     - `fakelottes-ntsc-composite`: Timothy Lottes, leileilol, aliaspider
+     - `crt-guest-dr-venom-kurozumi`: guest.r, Kurozumi
+     - `retro-v2`: Hyllian
+     - `color-mangler` / handheld color matrices: hunterk, Pokefan531
+     - `c64-monitor-fast`: hunterk, torridgristle
+     - `vector-glow`: aliaspider, hunterk
+     - `scalefx`: Sp00kyFox
+
+2. **Emscripten**
+   - Source: https://github.com/emscripten-core/emscripten
+   - Shell templates and WebAssembly runtime integration patterns are modeled after the Emscripten toolchain (University of Illinois / NCSA Open Source License and MIT License).
